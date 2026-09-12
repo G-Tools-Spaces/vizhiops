@@ -1,0 +1,272 @@
+"""Agent CRUD API endpoints."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.api_key import generate_api_key, hash_api_key, mask_api_key
+from app.auth.user_auth import get_current_user
+from app.db.session import get_db
+from app.models.db_models import AgentRow, UserRow
+from app.schemas.requests import CreateAgentRequest, UpdateAgentRequest
+from app.schemas.responses import AgentCreatedResponse, AgentResponse, AgentRotatedResponse
+from app.services.budget import get_agent_budget_status
+
+router = APIRouter(prefix="/v1/agents", tags=["agents"])
+
+
+def _agent_to_response(row: AgentRow) -> AgentResponse:
+    tags = json.loads(row.tags) if row.tags else []
+    return AgentResponse(
+        id=row.id,
+        agent_id=row.agent_id,
+        name=row.name,
+        description=row.description or "",
+        token_name=row.token_name,
+        tags=tags if isinstance(tags, list) else [],
+        status=row.status,
+        masked_key=row.masked_key,
+        last_used_at=row.last_used_at.isoformat() if row.last_used_at else None,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+        updated_at=row.updated_at.isoformat() if row.updated_at else "",
+    )
+
+
+async def _generate_agent_cid(db: AsyncSession) -> str:
+    while True:
+        cid = f"ag_{uuid.uuid4().hex[:10]}"
+        existing = await db.execute(select(AgentRow.id).where(AgentRow.agent_id == cid))
+        if existing.scalar_one_or_none() is None:
+            return cid
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_agent(
+    body: CreateAgentRequest,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentCreatedResponse:
+    """Create a new agent and generate an API key."""
+    cid = await _generate_agent_cid(db)
+    raw_key = generate_api_key()
+    tags = [t.strip() for t in body.tags.split(",") if t.strip()] if body.tags else []
+
+    row = AgentRow(
+        id=uuid.uuid4().hex[:12],
+        user_id=user.id,
+        agent_id=cid,
+        name=body.name,
+        description=body.description,
+        token_name=body.token_name,
+        api_key_hash=hash_api_key(raw_key),
+        masked_key=mask_api_key(raw_key),
+        tags=json.dumps(tags),
+        status="active",
+    )
+    db.add(row)
+    await db.flush()
+    await db.commit()
+
+    return AgentCreatedResponse(
+        agent=_agent_to_response(row),
+        api_key=raw_key,
+    )
+
+
+@router.get("")
+async def list_agents(
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[AgentResponse]:
+    """List all agents."""
+    result = await db.execute(
+        select(AgentRow)
+        .where(AgentRow.user_id == user.id)
+        .order_by(AgentRow.created_at.desc())
+    )
+    return [_agent_to_response(row) for row in result.scalars().all()]
+
+
+@router.get("/{agent_id}")
+async def get_agent(
+    agent_id: str,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentResponse:
+    """Get a single agent by agent_id (CID)."""
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return _agent_to_response(row)
+
+
+@router.patch("/{agent_id}")
+async def update_agent(
+    agent_id: str,
+    body: UpdateAgentRequest,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentResponse:
+    """Update agent fields."""
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if body.name is not None:
+        row.name = body.name
+    if body.description is not None:
+        row.description = body.description
+    if body.tags is not None:
+        row.tags = json.dumps([t.strip() for t in body.tags.split(",") if t.strip()])
+    if body.status is not None:
+        row.status = body.status
+
+    await db.flush()
+    return _agent_to_response(row)
+
+
+@router.post("/{agent_id}/revoke", status_code=status.HTTP_200_OK)
+async def revoke_agent(
+    agent_id: str,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentResponse:
+    """Revoke an agent token — it immediately becomes unusable for authentication."""
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if row.status == "revoked":
+        raise HTTPException(status_code=409, detail="Token is already revoked")
+
+    row.status = "revoked"
+    await db.flush()
+    await db.refresh(row)
+    return _agent_to_response(row)
+
+
+@router.post("/{agent_id}/rotate", status_code=status.HTTP_200_OK)
+async def rotate_agent(
+    agent_id: str,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AgentRotatedResponse:
+    """Rotate the API key for an agent.
+
+    Generates a new cryptographically secure key, hashes it, and atomically
+    marks the old key as revoked.  The new plaintext key is returned once —
+    store it immediately.
+    """
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    new_raw_key = generate_api_key()
+
+    # Atomically replace the key and re-activate the token in one commit.
+    row.api_key_hash = hash_api_key(new_raw_key)
+    row.masked_key = mask_api_key(new_raw_key)
+    row.status = "active"
+    # Preserve: name, description, token_name, tags, created_at, last_used_at
+
+    await db.flush()
+    await db.refresh(row)
+
+    return AgentRotatedResponse(
+        agent=_agent_to_response(row),
+        api_key=new_raw_key,
+    )
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent(
+    agent_id: str,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete an agent by its CID."""
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await db.delete(row)
+
+
+# ── Budget endpoints ────────────────────────────────────────────────────
+
+class BudgetUpdateRequest(BaseModel):
+    budget_usd: Optional[float] = None       # None = remove limit
+    budget_tokens: Optional[int] = None       # None = remove limit
+    budget_reset_at: Optional[str] = None     # ISO-8601 or None
+    clear: bool = False                        # if True, clears all budget limits
+
+
+@router.get("/{agent_id}/budget")
+async def get_agent_budget(
+    agent_id: str,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return the current budget configuration and usage for an agent."""
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return await get_agent_budget_status(db, agent_id)
+
+
+@router.patch("/{agent_id}/budget")
+async def update_agent_budget(
+    agent_id: str,
+    body: BudgetUpdateRequest,
+    user: UserRow = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Set or clear the spending budget for an agent.
+
+    Send `clear: true` to remove all limits. Otherwise provide
+    `budget_usd` and/or `budget_tokens` to set limits.
+    """
+    result = await db.execute(
+        select(AgentRow).where(AgentRow.agent_id == agent_id, AgentRow.user_id == user.id)
+    )
+    row = result.scalars().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if body.clear:
+        row.budget_usd = None
+        row.budget_tokens = None
+        row.budget_reset_at = None
+    else:
+        if body.budget_usd is not None:
+            row.budget_usd = body.budget_usd
+        if body.budget_tokens is not None:
+            row.budget_tokens = body.budget_tokens
+        if body.budget_reset_at is not None:
+            row.budget_reset_at = body.budget_reset_at
+
+    await db.commit()
+    await db.refresh(row)
+    return await get_agent_budget_status(db, agent_id)
