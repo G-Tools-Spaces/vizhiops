@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime as _dt
 import hashlib
 import secrets
 import uuid
@@ -16,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.db.session import get_db
+from app.db.time import utcnow
 from app.models.db_models import AgentRow, ModelConnectionRow
 
 _api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
@@ -88,7 +88,7 @@ def _extract_bearer_token(authorization: str | None) -> str:
 
 async def _touch_last_used(db: AsyncSession, row: AgentRow | ModelConnectionRow) -> None:
     """Update last_used_at timestamp on any token row. Session commit is handled by the dependency."""
-    row.last_used_at = _dt.datetime.utcnow()
+    row.last_used_at = utcnow()
     await db.flush()
 
 

@@ -28,6 +28,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.time import as_naive_utc
 from app.models.db_models import AgentRow, ModelConnectionRow, QueryRow, ResponseRow
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ async def _spent_for_agent(
     """Return (total_cost_usd, total_tokens) spent by agent_id since `since`.
     If `since` is None, return all-time totals.
     """
+    since = as_naive_utc(since)
     # Join queries → responses on query_id, filter by agent_id
     base_filter = QueryRow.agent_id == agent_id
     if since:
@@ -89,6 +91,7 @@ async def _spent_for_model(
     principal_id (which equals the model connection's ID as stored in queries.agent_id
     when a model-token is used directly).
     """
+    since = as_naive_utc(since)
     base_filter = QueryRow.agent_id == model_connection_id
     if since:
         base_filter = base_filter & (QueryRow.timestamp >= since)

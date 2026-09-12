@@ -9,6 +9,7 @@ import datetime as _dt
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.time import utcnow as _utcnow
 from app.models.db_models import (
     AgentJobRow,
     AgentRuntimeRow,
@@ -25,10 +26,6 @@ from app.schemas.responses import (
     MetricsResponse,
     RequestEventResponse,
 )
-
-
-def _utcnow() -> _dt.datetime:
-    return _dt.datetime.now(_dt.timezone.utc)
 
 
 def _id() -> str:

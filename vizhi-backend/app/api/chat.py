@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime as _dt
 import json
 import logging
 import time
@@ -18,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.api_key import ChatCredential, resolve_gateway_credential
 from app.db.session import async_session_factory, get_db
+from app.db.time import utcnow
 from app.models.db_models import AgentJobRow, QueryRow, ResponseRow
 from app.schemas.requests import ChatCompletionRequest
 from app.schemas.responses import (
@@ -341,7 +341,7 @@ async def _persist_agent_job_async(
                 sdk_type=sdk_type,
                 input_messages=json.dumps(messages),
                 endpoint="/v1/chat/completions",
-                timestamp=_dt.datetime.now(_dt.timezone.utc),
+                timestamp=utcnow(),
             )
             db.add(query_row)
             
