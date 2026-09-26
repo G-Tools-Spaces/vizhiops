@@ -116,12 +116,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--accent)] text-black">
+            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--brand)] text-[var(--brand-ink)]">
               <Radar className="h-5 w-5" />
             </span>
             <div>
               <CardTitle className="text-lg">Vizhi</CardTitle>
-              <p className="text-sm text-[var(--muted)]">Sign in to the control plane</p>
+              <p className="text-sm text-[var(--ink-tertiary)]">Sign in to the control plane</p>
             </div>
           </div>
         </CardHeader>
@@ -155,7 +155,7 @@ export default function LoginPage() {
                   minLength={mode === "signup" ? 8 : 1}
                   required
                 />
-                <Eye className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
+                <Eye className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--ink-tertiary)]" />
               </div>
             </div>
             <FieldError message={error} />
@@ -164,16 +164,16 @@ export default function LoginPage() {
             </Button>
           </form>
           <div className="my-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-xs text-[var(--muted)] font-medium">OR</span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
+            <span className="text-xs text-[var(--ink-tertiary)] font-medium">OR</span>
+            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
           </div>
           <div className="flex justify-center">
             <div ref={googleButtonRef} />
           </div>
           <button
             type="button"
-            className="mt-5 block w-full text-center text-sm text-[var(--muted)] transition hover:text-white"
+            className="mt-5 block w-full text-center text-sm text-[var(--ink-secondary)] transition hover:text-[var(--ink)]"
             onClick={() => {
               setError("");
               setMode(mode === "login" ? "signup" : "login");

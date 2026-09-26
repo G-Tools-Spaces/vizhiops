@@ -14,15 +14,15 @@ export function MetricCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex min-h-28 items-start justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">{label}</p>
-          <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
-          <p className="mt-2 text-xs text-[var(--muted)]">{hint}</p>
-        </div>
-        <span className="rounded-md border border-white/10 bg-white/[0.06] p-2 text-[var(--accent)]">
+      <CardContent className="flex min-h-24 items-start gap-3 p-4">
+        <span className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-[var(--ink-secondary)]">
           <Icon className="h-4 w-4" />
         </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">{label}</p>
+          <p className="mt-1 text-xl font-semibold text-[var(--ink)]">{value}</p>
+          <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{hint}</p>
+        </div>
       </CardContent>
     </Card>
   );

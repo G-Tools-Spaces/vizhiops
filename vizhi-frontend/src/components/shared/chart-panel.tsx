@@ -6,12 +6,12 @@ import type { MetricPoint } from "@/types/domain";
 
 const RequestTimelineRenderer = dynamic(
   () => import("@/components/shared/chart-renderers").then((module) => module.RequestTimelineRenderer),
-  { ssr: false, loading: () => <div className="h-full rounded-md bg-white/[0.03]" /> },
+  { ssr: false, loading: () => <div className="h-full rounded-md bg-[var(--surface)]" /> },
 );
 
 const TokenTimelineRenderer = dynamic(
   () => import("@/components/shared/chart-renderers").then((module) => module.TokenTimelineRenderer),
-  { ssr: false, loading: () => <div className="h-full rounded-md bg-white/[0.03]" /> },
+  { ssr: false, loading: () => <div className="h-full rounded-md bg-[var(--surface)]" /> },
 );
 
 export function RequestTimeline({ data }: { data: MetricPoint[] }) {

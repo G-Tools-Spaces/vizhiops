@@ -3,41 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  Activity,
-  Bot,
-  GitBranch,
-  Heart,
-  Home,
-  KeyRound,
-  LogOut,
-  MessageSquare,
-  PlusCircle,
-  Radar,
-  Search,
-  Shield,
-} from "lucide-react";
+import { LogOut, MessageSquare, Radar, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { CommandPalette } from "@/components/command-palette";
+import { navSections } from "@/components/layout/nav";
 import { api } from "@/lib/api/client";
-import { clearSession, getStoredUser, isAuthenticated, setCurrentUser, type AuthUser } from "@/lib/auth";
+import { clearSession, getStoredUser, setCurrentUser, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/models/connect", label: "Connect Model", icon: PlusCircle },
-  { href: "/models/tokens", label: "Model Tokens", icon: KeyRound },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/agents/tokens", label: "Agent Tokens", icon: Shield },
-  { href: "/links", label: "Links", icon: GitBranch },
-  { href: "/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/playground", label: "Playground", icon: MessageSquare },
-  { href: "/health", label: "Provider Health", icon: Heart },
-];
+// Flat lookup for the breadcrumb's current-page label.
+const pageLabels = new Map<string, string>(
+  navSections.flatMap((s) => s.items.map((i) => [i.href, i.label] as const)),
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -65,63 +49,102 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  return (
-    <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-white/10 bg-[#090c11]/95 px-3 py-4 lg:block">
-        <Link href="/dashboard" className="flex h-12 items-center gap-3 px-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--accent)] text-black">
-            <Radar className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-base font-semibold">Vizhi</span>
-            <span className="block text-xs text-[var(--muted)]">Agent observability</span>
-          </span>
-        </Link>
-        <nav className="mt-6 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
+  const currentLabel = pageLabels.get(pathname) ?? "Dashboard";
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex h-10 items-center gap-3 rounded-md px-3 text-sm text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-white",
-                  active && "bg-white/[0.08] text-white",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-white/10 bg-[#080a0d]/85 backdrop-blur">
-          <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[var(--muted)] md:max-w-xl">
-              <Search className="h-4 w-4 shrink-0" />
-              <span className="truncate">Search agents, model tokens, CIDs, request IDs</span>
+  return (
+    <div className="min-h-screen bg-[var(--canvas)]">
+      {/* Sidebar */}
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-[var(--line)] bg-[var(--panel)] lg:flex">
+        <Link href="/dashboard" className="flex h-14 items-center gap-2.5 border-b border-[var(--line)] px-4">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--brand)] text-[var(--brand-ink)]">
+            <Radar className="h-4 w-4" />
+          </span>
+          <span className="text-sm font-semibold text-[var(--ink)]">Vizhi</span>
+        </Link>
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {navSections.map((section) => (
+            <div key={section.title} className="mb-5">
+              <p className="mb-1 px-2 text-[11px] font-medium uppercase tracking-wider text-[var(--ink-tertiary)]">
+                {section.title}
+              </p>
+              <ul className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex h-9 items-center gap-2.5 rounded-md px-2 text-sm transition-colors",
+                          active
+                            ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                            : "text-[var(--ink-secondary)] hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]",
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-            <div className="flex items-center gap-2">
+          ))}
+        </nav>
+        <div className="border-t border-[var(--line)] p-3">
+          <a
+            href="http://localhost:3001"
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-9 items-center gap-2.5 rounded-md px-2 text-sm text-[var(--ink-secondary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]"
+          >
+            <MessageSquare className="h-4 w-4" />
+            API reference
+          </a>
+        </div>
+      </aside>
+
+      {/* Main column */}
+      <div className="lg:pl-60">
+        {/* Breadcrumb top bar */}
+        <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--panel)]/90 backdrop-blur">
+          <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
+            <nav className="flex min-w-0 items-center gap-1.5 text-sm">
+              <span className="font-medium text-[var(--ink)]">Vizhi</span>
+              <span className="text-[var(--ink-tertiary)]">/</span>
+              <span className="truncate text-[var(--ink-secondary)]">{currentLabel}</span>
+            </nav>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="hidden h-8 items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink-secondary)] sm:flex"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span>Search…</span>
+                <kbd className="rounded border border-[var(--line)] bg-[var(--panel)] px-1 py-px text-[10px] font-medium">
+                  ⌘K
+                </kbd>
+              </button>
               {user ? (
-                <span className="hidden max-w-52 truncate text-xs text-[var(--muted)] sm:block">
+                <span className="hidden max-w-52 truncate text-xs text-[var(--ink-tertiary)] sm:block">
                   {user.email}
                 </span>
               ) : null}
-              <Button variant="secondary" size="sm">
-                <Link href="/monitoring">Live</Link>
-              </Button>
+              <ThemeToggle />
               <Button variant="ghost" size="icon" title="Logout" onClick={logout}>
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </header>
+
         <main className="px-4 py-6 md:px-6">{children}</main>
       </div>
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

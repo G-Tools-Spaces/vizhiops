@@ -64,7 +64,7 @@ export default function MonitoringPage() {
       />
 
       {/* Filter Bar */}
-      <section className="mb-6 grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-4 md:grid-cols-5">
+      <section className="mb-6 grid gap-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 md:grid-cols-5">
         <div className="space-y-2">
           <Label>Time Range</Label>
           <Select
@@ -159,7 +159,7 @@ export default function MonitoringPage() {
       <section className="mt-6">
         <h2 className="text-xl font-semibold mb-4">Request History</h2>
         {requests.length === 0 ? (
-          <Card className="p-8 text-center text-[var(--muted)]">
+          <Card className="p-8 text-center text-[var(--ink-tertiary)]">
             No requests found for the selected filters.
           </Card>
         ) : (
@@ -167,19 +167,19 @@ export default function MonitoringPage() {
             {requests.map((request) => (
               <Card
                 key={request.id}
-                className="p-4 border border-[var(--border)] hover:border-[var(--primary)] transition-colors"
+                className="p-4 border border-[var(--line)] hover:border-[var(--accent)] transition-colors"
               >
                 {/* Header row */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <span className="text-xs font-mono text-[var(--muted)]">{request.id}</span>
+                      <span className="text-xs font-mono text-[var(--ink-tertiary)]">{request.id}</span>
                       <StatusBadge status={request.status < 300 ? "active" : "error"} />
-                      <span className="text-xs text-[var(--muted)]">
+                      <span className="text-xs text-[var(--ink-tertiary)]">
                         {new Date(request.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-[var(--muted)]">
+                    <div className="flex items-center gap-4 text-xs text-[var(--ink-tertiary)]">
                       <span>
                         <span className="font-semibold">Agent:</span>{" "}
                         {agentByCid(request.agentId)}
@@ -194,10 +194,10 @@ export default function MonitoringPage() {
                     </div>
                   </div>
                   <div className="text-right shrink-0 ml-4">
-                    <div className="text-sm font-semibold text-[var(--foreground)]">
+                    <div className="text-sm font-semibold text-[var(--ink)]">
                       ${(request.estimatedCost ?? 0).toFixed(4)}
                     </div>
-                    <div className="text-xs text-[var(--muted)]">
+                    <div className="text-xs text-[var(--ink-tertiary)]">
                       {formatNumber(request.inputTokens + request.outputTokens)} tokens
                     </div>
                     <Button size="sm" className="mt-2">
@@ -208,41 +208,41 @@ export default function MonitoringPage() {
 
                 {/* Prompt */}
                 <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--muted)] mb-1">PROMPT:</div>
+                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">PROMPT:</div>
                   <div className="bg-[var(--background-secondary,#1a1a2e)] rounded p-3 text-sm max-h-32 overflow-y-auto">
                     {(request.prompt ?? []).length > 0 ? (
                       (request.prompt ?? []).map((msg, idx) => (
                         <div key={idx} className="mb-2 last:mb-0">
-                          <span className="font-semibold text-[var(--primary)]">{msg.role}:</span>{" "}
-                          <span className="text-[var(--foreground)]">{msg.content}</span>
+                          <span className="font-semibold text-[var(--accent)]">{msg.role}:</span>{" "}
+                          <span className="text-[var(--ink)]">{msg.content}</span>
                         </div>
                       ))
                     ) : (
-                      <span className="text-[var(--muted)]">No prompt data</span>
+                      <span className="text-[var(--ink-tertiary)]">No prompt data</span>
                     )}
                   </div>
                 </div>
 
                 {/* Response */}
                 <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--muted)] mb-1">RESPONSE:</div>
+                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">RESPONSE:</div>
                   <div className="bg-[var(--background-secondary,#1a1a2e)] rounded p-3 text-sm max-h-32 overflow-y-auto">
                     {request.errorMessage ? (
-                      <span className="text-[var(--danger,#f87171)]">{request.errorMessage}</span>
+                      <span className="text-[var(--danger)]">{request.errorMessage}</span>
                     ) : request.responseText ? (
-                      <span className="text-[var(--foreground)]">{request.responseText}</span>
+                      <span className="text-[var(--ink)]">{request.responseText}</span>
                     ) : (
-                      <span className="text-[var(--muted)]">No response data</span>
+                      <span className="text-[var(--ink-tertiary)]">No response data</span>
                     )}
                   </div>
                 </div>
 
                 {/* Token breakdown */}
-                <div className="flex items-center gap-4 text-xs text-[var(--muted)]">
+                <div className="flex items-center gap-4 text-xs text-[var(--ink-tertiary)]">
                   {request.status < 300 ? (
-                    <CheckCircle className="h-3 w-3 text-green-500" />
+                    <CheckCircle className="h-3 w-3 text-[var(--ok)]" />
                   ) : (
-                    <AlertCircle className="h-3 w-3 text-[var(--danger,#f87171)]" />
+                    <AlertCircle className="h-3 w-3 text-[var(--danger)]" />
                   )}
                   <span>
                     <span className="font-semibold">Input:</span>{" "}
@@ -256,7 +256,7 @@ export default function MonitoringPage() {
                     <span className="font-semibold">Total:</span>{" "}
                     {formatNumber(request.inputTokens + request.outputTokens)} tokens
                   </span>
-                  <span className="font-mono text-xs text-[var(--muted)]">{request.endpoint}</span>
+                  <span className="font-mono text-xs text-[var(--ink-tertiary)]">{request.endpoint}</span>
                 </div>
               </Card>
             ))}

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Archive, Bot, Edit, Trash2 } from "lucide-react";
+import { Bot, Edit, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,14 +69,14 @@ export default function AgentsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>
-                    Token Name <span className="text-[var(--muted)] font-normal">(optional)</span>
+                    Token Name <span className="text-[var(--ink-tertiary)] font-normal">(optional)</span>
                   </Label>
                   <Input
                     {...register("tokenName")}
                     placeholder="e.g. prod-ci-bot"
                     maxLength={120}
                   />
-                  <p className="text-xs text-[var(--muted)]">A friendly label shown in the token list</p>
+                  <p className="text-xs text-[var(--ink-tertiary)]">A friendly label shown in the token list</p>
                 </div>
               </div>
               <Button type="submit" variant="primary" disabled={createAgent.isPending}>
@@ -87,9 +87,10 @@ export default function AgentsPage() {
           </CardContent>
         </Card>
         <DataTable
+          tableId="agents"
           headers={["Agent", "CID", "Tags", "Status", "Actions"]}
           rows={data.map((agent) => [
-            <div key="agent"><p className="font-medium">{agent.name}</p><p className="text-xs text-[var(--muted)]">{agent.description}</p></div>,
+            <div key="agent"><p className="font-medium">{agent.name}</p><p className="text-xs text-[var(--ink-tertiary)]">{agent.description}</p></div>,
             <span className="font-mono text-xs" key="cid">{agent.cid}</span>,
             agent.tags.join(", "),
             <StatusBadge key="status" status={agent.status} />,

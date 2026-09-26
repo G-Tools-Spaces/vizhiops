@@ -1,0 +1,181 @@
+[
+  {
+    "date": "2026-09-25T08:26:19.144Z",
+    "version": "1.0.0",
+    "baseline": true,
+    "added": [
+      {
+        "method": "POST",
+        "path": "/v1/auth/signup",
+        "summary": "Signup"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/auth/login",
+        "summary": "Login"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/auth/google",
+        "summary": "Google Login"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/auth/me",
+        "summary": "Me"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/auth/logout",
+        "summary": "Logout"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/agents",
+        "summary": "List Agents"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/agents",
+        "summary": "Create Agent"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/agents/{agent_id}",
+        "summary": "Get Agent"
+      },
+      {
+        "method": "PATCH",
+        "path": "/v1/agents/{agent_id}",
+        "summary": "Update Agent"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/agents/{agent_id}",
+        "summary": "Delete Agent"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/agents/{agent_id}/revoke",
+        "summary": "Revoke Agent"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/agents/{agent_id}/rotate",
+        "summary": "Rotate Agent"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/agents/{agent_id}/budget",
+        "summary": "Get Agent Budget"
+      },
+      {
+        "method": "PATCH",
+        "path": "/v1/agents/{agent_id}/budget",
+        "summary": "Update Agent Budget"
+      },
+      {
+        "method": "POST",
+        "path": "/agents/register",
+        "summary": "Register Agent"
+      },
+      {
+        "method": "POST",
+        "path": "/agents/heartbeat",
+        "summary": "Agent Heartbeat"
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/next",
+        "summary": "Next Job"
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/submit",
+        "summary": "Submit Job Completion"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "summary": "Chat Completions"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/models",
+        "summary": "List Models"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/models",
+        "summary": "Create Model Connection"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/models/{model_id}/revoke",
+        "summary": "Revoke Model Connection"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/models/{model_id}/rotate",
+        "summary": "Rotate Model Connection"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/models/registry",
+        "summary": "Model Registry"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/models/{model_id}/usage",
+        "summary": "Get Model Usage"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/models/{model_id}",
+        "summary": "Delete Model Connection"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/models/{model_id}/budget",
+        "summary": "Get Model Budget"
+      },
+      {
+        "method": "PATCH",
+        "path": "/v1/models/{model_id}/budget",
+        "summary": "Update Model Budget"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/queries",
+        "summary": "List Queries"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/queries/{query_id}",
+        "summary": "Get Query"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/health/providers",
+        "summary": "Get Provider Health"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/health/providers/refresh",
+        "summary": "Refresh Provider Health"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/metrics",
+        "summary": "Get Metrics"
+      },
+      {
+        "method": "GET",
+        "path": "/v1/dashboard",
+        "summary": "Get Dashboard"
+      }
+    ],
+    "removed": [],
+    "changed": []
+  }
+]

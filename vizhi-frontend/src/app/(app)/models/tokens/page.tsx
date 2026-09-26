@@ -94,6 +94,7 @@ export default function ModelTokensPage() {
         action={<Button variant="primary"><Link href="/models/connect">Connect Model</Link></Button>}
       />
       <DataTable
+        tableId="model-tokens"
         headers={["Token Name", "Model", "Provider", "Token", "Last Used", "Created", "Usage", "Status", "Actions"]}
         rows={models.map((model) => {
           const isRevoked = model.status === "revoked";
@@ -101,19 +102,17 @@ export default function ModelTokensPage() {
           const isJustRotated = rotatedToken?.id === model.id;
           const label = model.tokenName || model.modelName;
 
-          console.log(model, "model");
-
           return [
             // Token Name
-            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--muted)] line-through" : ""}`}>
-              {model.tokenName || <span className="text-[var(--muted)] italic">—</span>}
+            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}`}>
+              {model.tokenName || <span className="text-[var(--ink-tertiary)] italic">—</span>}
             </span>,
 
             // Model name (clickable → usage page)
             <button
               key="model-name"
               onClick={() => handleViewUsage(model.id)}
-              className="text-left hover:text-[var(--primary)] transition-colors cursor-pointer font-medium text-sm"
+              className="text-left hover:text-[var(--accent)] transition-colors cursor-pointer font-medium text-sm"
             >
               {model.modelName}
             </button>,
@@ -125,7 +124,7 @@ export default function ModelTokensPage() {
             <div className="flex items-center gap-2" key="token">
               {isJustRotated && rotatedToken ? (
                 <>
-                  <span className="font-mono text-xs text-[var(--warning)] truncate max-w-[140px]" title={rotatedToken.apiKey}>
+                  <span className="font-mono text-xs text-[var(--warn)] truncate max-w-[140px]" title={rotatedToken.apiKey}>
                     {rotatedToken.apiKey}
                   </span>
                   <CopyOnceButton value={rotatedToken.apiKey} onDismiss={() => dismissRotatedToken(model.id)} />
@@ -135,18 +134,18 @@ export default function ModelTokensPage() {
                   <span className="font-mono text-xs" title="Full token only shown once at creation or rotation">
                     {model.maskedKey}
                   </span>
-                  <span className="text-xs text-[var(--muted)]">(masked)</span>
+                  <span className="text-xs text-[var(--ink-tertiary)]">(masked)</span>
                 </>
               )}
             </div>,
 
             // Last Used
-            <span key="last" className="text-xs text-[var(--muted)]">
+            <span key="last" className="text-xs text-[var(--ink-tertiary)]">
               {formatDate(model.lastUsedAt)}
             </span>,
 
             // Created
-            <span key="created" className="text-xs text-[var(--muted)]">
+            <span key="created" className="text-xs text-[var(--ink-tertiary)]">
               {formatDate(model.createdAt)}
             </span>,
 
@@ -154,7 +153,7 @@ export default function ModelTokensPage() {
             <button
               key="usage"
               onClick={() => handleViewUsage(model.id)}
-              className="hover:text-[var(--primary)] transition-colors cursor-pointer font-medium text-sm"
+              className="hover:text-[var(--accent)] transition-colors cursor-pointer font-medium text-sm"
             >
               {formatNumber(model.usageCount)}
             </button>,
@@ -255,12 +254,12 @@ function CopyOnceButton({ value, onDismiss }: { value: string; onDismiss: () => 
     <button
       onClick={handleCopy}
       title={copied ? "Copied!" : "Copy new token — it will disappear after copying"}
-      className="p-1 rounded hover:bg-[var(--accent)] transition-colors"
+      className="p-1 rounded hover:bg-[var(--surface-strong)] transition-colors"
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-green-500" />
+        <Check className="h-3.5 w-3.5 text-[var(--ok)]" />
       ) : (
-        <Copy className="h-3.5 w-3.5 text-[var(--warning)]" />
+        <Copy className="h-3.5 w-3.5 text-[var(--warn)]" />
       )}
     </button>
   );

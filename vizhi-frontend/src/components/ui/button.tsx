@@ -3,14 +3,14 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]",
   {
     variants: {
       variant: {
-        primary: "bg-[var(--accent)] text-black hover:bg-[#65e5ba]",
-        secondary: "border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]",
-        ghost: "text-[var(--muted)] hover:bg-white/[0.07] hover:text-white",
-        danger: "bg-[var(--danger)] text-white hover:bg-[#ff8585]",
+        primary: "bg-[var(--brand)] text-[var(--brand-ink)] hover:bg-[var(--brand-hover)]",
+        secondary: "border border-[var(--line)] bg-[var(--panel)] text-[var(--ink)] hover:bg-[var(--surface-strong)]",
+        ghost: "text-[var(--ink-secondary)] hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]",
+        danger: "bg-[var(--danger)] text-white hover:opacity-90",
       },
       size: {
         sm: "h-8 px-2.5 text-xs",

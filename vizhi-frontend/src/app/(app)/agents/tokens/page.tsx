@@ -87,6 +87,7 @@ export default function AgentTokensPage() {
         description="Monitoring identities for external applications. Full tokens are shown only once at creation or after rotation — copy them immediately. Only masked versions are displayed here."
       />
       <DataTable
+        tableId="agent-tokens"
         headers={["Token Name", "Agent", "CID", "Token", "Last Used", "Created", "Status", "Actions"]}
         rows={agents.map((agent) => {
           const isRevoked = agent.status === "revoked";
@@ -96,15 +97,15 @@ export default function AgentTokensPage() {
 
           return [
             // Token Name
-            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--muted)] line-through" : ""}`}>
-              {agent.tokenName || <span className="text-[var(--muted)] italic">—</span>}
+            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}`}>
+              {agent.tokenName || <span className="text-[var(--ink-tertiary)] italic">—</span>}
             </span>,
 
             // Agent Name + linked model count
             <span key="name" className="text-sm font-medium">
               {agent.name}
               {linkedModels > 0 && (
-                <span className="ml-2 text-xs text-[var(--muted)]">({linkedModels} model{linkedModels !== 1 ? "s" : ""})</span>
+                <span className="ml-2 text-xs text-[var(--ink-tertiary)]">({linkedModels} model{linkedModels !== 1 ? "s" : ""})</span>
               )}
             </span>,
 
@@ -115,7 +116,7 @@ export default function AgentTokensPage() {
             <div className="flex items-center gap-2" key="token">
               {isJustRotated && rotatedToken ? (
                 <>
-                  <span className="font-mono text-xs text-[var(--warning)] truncate max-w-[140px]" title={rotatedToken.apiKey}>
+                  <span className="font-mono text-xs text-[var(--warn)] truncate max-w-[140px]" title={rotatedToken.apiKey}>
                     {rotatedToken.apiKey}
                   </span>
                   <CopyOnceButton value={rotatedToken.apiKey} onDismiss={() => dismissRotatedToken(agent.cid)} />
@@ -125,18 +126,18 @@ export default function AgentTokensPage() {
                   <span className="font-mono text-xs" title="Full token only shown once at creation or rotation">
                     {agent.maskedKey}
                   </span>
-                  <span className="text-xs text-[var(--muted)]">(masked)</span>
+                  <span className="text-xs text-[var(--ink-tertiary)]">(masked)</span>
                 </>
               )}
             </div>,
 
             // Last Used
-            <span key="last" className="text-xs text-[var(--muted)]">
+            <span key="last" className="text-xs text-[var(--ink-tertiary)]">
               {formatDate(agent.lastUsedAt)}
             </span>,
 
             // Created
-            <span key="created" className="text-xs text-[var(--muted)]">
+            <span key="created" className="text-xs text-[var(--ink-tertiary)]">
               {formatDate(agent.createdAt)}
             </span>,
 
@@ -231,12 +232,12 @@ function CopyOnceButton({ value, onDismiss }: { value: string; onDismiss: () => 
     <button
       onClick={handleCopy}
       title={copied ? "Copied!" : "Copy new token — it will disappear after copying"}
-      className="p-1 rounded hover:bg-[var(--accent)] transition-colors"
+      className="p-1 rounded hover:bg-[var(--surface-strong)] transition-colors"
     >
       {copied ? (
-        <Check className="h-3.5 w-3.5 text-green-500" />
+        <Check className="h-3.5 w-3.5 text-[var(--ok)]" />
       ) : (
-        <Copy className="h-3.5 w-3.5 text-[var(--warning)]" />
+        <Copy className="h-3.5 w-3.5 text-[var(--warn)]" />
       )}
     </button>
   );

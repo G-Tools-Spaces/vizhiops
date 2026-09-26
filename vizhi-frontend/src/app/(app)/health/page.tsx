@@ -37,37 +37,37 @@ const STATUS_META: Record<
 > = {
   operational: {
     label: "Operational",
-    color: "text-emerald-400",
-    bgColor: "bg-emerald-400/10",
-    borderColor: "border-emerald-400/30",
+    color: "text-[var(--ok)]",
+    bgColor: "bg-[var(--ok-soft)]",
+    borderColor: "border-[var(--ok)]/30",
     Icon: CheckCircle2,
   },
   degraded: {
     label: "Degraded",
-    color: "text-yellow-400",
-    bgColor: "bg-yellow-400/10",
-    borderColor: "border-yellow-400/30",
+    color: "text-[var(--warn)]",
+    bgColor: "bg-[var(--warn-soft)]",
+    borderColor: "border-[var(--warn)]/30",
     Icon: AlertTriangle,
   },
   down: {
     label: "Down",
-    color: "text-red-400",
-    bgColor: "bg-red-400/10",
-    borderColor: "border-red-400/30",
+    color: "text-[var(--danger)]",
+    bgColor: "bg-[var(--danger-soft)]",
+    borderColor: "border-[var(--danger)]/30",
     Icon: WifiOff,
   },
   unknown: {
     label: "Unknown",
-    color: "text-[var(--muted)]",
-    bgColor: "bg-white/5",
-    borderColor: "border-white/10",
+    color: "text-[var(--ink-tertiary)]",
+    bgColor: "bg-[var(--surface-strong)]",
+    borderColor: "border-[var(--line)]",
     Icon: HelpCircle,
   },
   unconfigured: {
     label: "Unconfigured",
-    color: "text-[var(--muted)]",
-    bgColor: "bg-white/5",
-    borderColor: "border-white/10",
+    color: "text-[var(--ink-tertiary)]",
+    bgColor: "bg-[var(--surface-strong)]",
+    borderColor: "border-[var(--line)]",
     Icon: Settings,
   },
 };
@@ -76,11 +76,11 @@ const OVERALL_META: Record<
   string,
   { label: string; dotColor: string; textColor: string }
 > = {
-  operational: { label: "All Systems Operational", dotColor: "bg-emerald-400", textColor: "text-emerald-400" },
-  degraded: { label: "Systems Degraded", dotColor: "bg-yellow-400", textColor: "text-yellow-400" },
-  partial_outage: { label: "Partial Outage", dotColor: "bg-orange-400", textColor: "text-orange-400" },
-  major_outage: { label: "Major Outage", dotColor: "bg-red-400", textColor: "text-red-400" },
-  unknown: { label: "Status Unknown", dotColor: "bg-[var(--muted)]", textColor: "text-[var(--muted)]" },
+  operational: { label: "All Systems Operational", dotColor: "bg-[var(--ok)]", textColor: "text-[var(--ok)]" },
+  degraded: { label: "Systems Degraded", dotColor: "bg-[var(--warn)]", textColor: "text-[var(--warn)]" },
+  partial_outage: { label: "Partial Outage", dotColor: "bg-[var(--warn)]", textColor: "text-[var(--warn)]" },
+  major_outage: { label: "Major Outage", dotColor: "bg-[var(--danger)]", textColor: "text-[var(--danger)]" },
+  unknown: { label: "Status Unknown", dotColor: "bg-[var(--ink-tertiary)]", textColor: "text-[var(--ink-tertiary)]" },
 };
 
 // ── Provider logo placeholders (emoji fallback) ──────────────────────────
@@ -99,9 +99,9 @@ function getStatusMeta(item: ProviderHealthItem) {
   if (item.provider === "local" && item.status === "unconfigured") {
     return {
       label: "Not Running",
-      color: "text-slate-400",
-      bgColor: "bg-slate-500/10",
-      borderColor: "border-slate-500/30",
+      color: "text-[var(--ink-tertiary)]",
+      bgColor: "bg-[var(--surface-strong)]",
+      borderColor: "border-[var(--line)]",
       Icon: WifiOff,
     };
   }
@@ -127,14 +127,14 @@ function LatencyBar({ latencyMs, status }: { latencyMs: number; status: Provider
   // Scale 0–3000ms visually; clamp at 100%
   const pct = Math.min(100, Math.round((latencyMs / 3000) * 100));
   const color =
-    latencyMs < 800 ? "bg-emerald-400" : latencyMs < 2000 ? "bg-yellow-400" : "bg-red-400";
+    latencyMs < 800 ? "bg-[var(--ok)]" : latencyMs < 2000 ? "bg-[var(--warn)]" : "bg-[var(--danger)]";
   return (
     <div className="mt-2">
-      <div className="mb-1 flex justify-between text-xs text-[var(--muted)]">
+      <div className="mb-1 flex justify-between text-xs text-[var(--ink-tertiary)]">
         <span>Latency</span>
         <span>{latencyMs}ms</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-strong)]">
         <div
           className={cn("h-full rounded-full transition-all duration-500", color)}
           style={{ width: `${pct}%` }}
@@ -165,8 +165,8 @@ function ProviderCard({ item }: { item: ProviderHealthItem }) {
             {PROVIDER_EMOJI[item.provider] ?? "🔲"}
           </span>
           <div>
-            <p className="text-sm font-semibold text-white">{item.label}</p>
-            <p className="text-xs text-[var(--muted)] capitalize">{item.provider}</p>
+            <p className="text-sm font-semibold text-[var(--ink)]">{item.label}</p>
+            <p className="text-xs text-[var(--ink-tertiary)] capitalize">{item.provider}</p>
           </div>
         </div>
         {/* Status pill */}
@@ -186,16 +186,16 @@ function ProviderCard({ item }: { item: ProviderHealthItem }) {
       <LatencyBar latencyMs={item.latencyMs} status={item.status} />
 
       {/* Message */}
-      <p className="mt-3 line-clamp-2 text-xs text-[var(--muted)]">{item.message}</p>
+      <p className="mt-3 line-clamp-2 text-xs text-[var(--ink-tertiary)]">{item.message}</p>
 
       {/* Footer row */}
       <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+        <div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">
           <Clock className="h-3 w-3" />
           <span>{relativeTime(item.lastChecked)}</span>
         </div>
         {item.incidentCount > 0 && (
-          <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+          <span className="rounded-full bg-[var(--danger-soft)] px-2 py-0.5 text-xs text-[var(--danger)]">
             {item.incidentCount} consecutive failure{item.incidentCount > 1 ? "s" : ""}
           </span>
         )}
@@ -209,7 +209,7 @@ function ProviderCard({ item }: { item: ProviderHealthItem }) {
 function OverallBanner({ status, checkedAt }: { status: string; checkedAt: string }) {
   const meta = OVERALL_META[status] ?? OVERALL_META.unknown;
   return (
-    <div className="mb-6 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4">
+    <div className="mb-6 flex items-center justify-between rounded-xl border border-[var(--line)] bg-[var(--panel)] px-5 py-4">
       <div className="flex items-center gap-3">
         {/* Pulsing dot */}
         <span className="relative flex h-3 w-3">
@@ -223,7 +223,7 @@ function OverallBanner({ status, checkedAt }: { status: string; checkedAt: strin
         </span>
         <span className={cn("text-sm font-semibold", meta.textColor)}>{meta.label}</span>
       </div>
-      <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+      <div className="flex items-center gap-1 text-xs text-[var(--ink-tertiary)]">
         <Activity className="h-3 w-3" />
         <span>Last checked {relativeTime(checkedAt)}</span>
       </div>
@@ -235,19 +235,19 @@ function OverallBanner({ status, checkedAt }: { status: string; checkedAt: strin
 
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-xl border border-white/10 bg-white/[0.03] p-5">
+    <div className="animate-pulse rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-white/10" />
+          <div className="h-8 w-8 rounded-full bg-[var(--surface-strong)]" />
           <div className="space-y-1.5">
-            <div className="h-3 w-24 rounded bg-white/10" />
-            <div className="h-2.5 w-16 rounded bg-white/10" />
+            <div className="h-3 w-24 rounded bg-[var(--surface-strong)]" />
+            <div className="h-2.5 w-16 rounded bg-[var(--surface-strong)]" />
           </div>
         </div>
-        <div className="h-5 w-20 rounded-full bg-white/10" />
+        <div className="h-5 w-20 rounded-full bg-[var(--surface-strong)]" />
       </div>
-      <div className="mt-4 h-1.5 w-full rounded-full bg-white/10" />
-      <div className="mt-3 h-3 w-3/4 rounded bg-white/10" />
+      <div className="mt-4 h-1.5 w-full rounded-full bg-[var(--surface-strong)]" />
+      <div className="mt-3 h-3 w-3/4 rounded bg-[var(--surface-strong)]" />
     </div>
   );
 }
@@ -258,7 +258,6 @@ function SummaryStats({ providers }: { providers: ProviderHealthItem[] }) {
   const operational = providers.filter((p) => p.status === "operational").length;
   const degraded = providers.filter((p) => p.status === "degraded").length;
   const down = providers.filter((p) => p.status === "down").length;
-  const unconfigured = providers.filter((p) => p.status === "unconfigured").length;
   const avgLatency = (() => {
     const measured = providers.filter((p) => p.latencyMs > 0);
     if (!measured.length) return 0;
@@ -268,21 +267,21 @@ function SummaryStats({ providers }: { providers: ProviderHealthItem[] }) {
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
       {[
-        { label: "Operational", value: operational, color: "text-emerald-400" },
-        { label: "Degraded", value: degraded, color: "text-yellow-400" },
-        { label: "Down", value: down, color: "text-red-400" },
+        { label: "Operational", value: operational, color: "text-[var(--ok)]" },
+        { label: "Degraded", value: degraded, color: "text-[var(--warn)]" },
+        { label: "Down", value: down, color: "text-[var(--danger)]" },
         {
           label: "Avg Latency",
           value: avgLatency ? `${avgLatency}ms` : "—",
-          color: "text-white",
+          color: "text-[var(--ink)]",
           icon: Zap,
         },
       ].map(({ label, value, color, icon: Icon }) => (
         <div
           key={label}
-          className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
+          className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3"
         >
-          <p className="text-xs text-[var(--muted)]">{label}</p>
+          <p className="text-xs text-[var(--ink-tertiary)]">{label}</p>
           <p className={cn("mt-1 text-xl font-semibold", color)}>
             {Icon && <Icon className="mr-1 inline h-4 w-4" />}
             {value}
@@ -309,7 +308,7 @@ export default function HealthStatusPage() {
             onClick={() => refresh()}
             disabled={isRefreshing}
             className={cn(
-              "inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm text-white transition hover:bg-white/[0.1] disabled:opacity-50"
+              "inline-flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-3 py-1.5 text-sm text-[var(--ink)] transition hover:bg-[var(--surface-strong)] disabled:opacity-50"
             )}
           >
             <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
@@ -320,7 +319,7 @@ export default function HealthStatusPage() {
 
       {/* Error state */}
       {isError && (
-        <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-400">
+        <div className="mb-6 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-soft)] px-5 py-4 text-sm text-[var(--danger)]">
           Failed to load provider health. Make sure the backend is running.
         </div>
       )}
@@ -343,8 +342,8 @@ export default function HealthStatusPage() {
       </div>
 
       {/* Legend */}
-      <div className="mt-8 rounded-xl border border-white/10 bg-white/[0.02] px-5 py-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+      <div className="mt-8 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-5 py-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--ink-tertiary)]">
           Status Legend
         </p>
         <div className="flex flex-wrap gap-4">
@@ -360,13 +359,13 @@ export default function HealthStatusPage() {
             }
           )}
         </div>
-        <p className="mt-3 text-xs text-[var(--muted)]">
-          <strong className="text-white">Operational</strong> — endpoint responded in under 3 s with a non-5xx status. ·{" "}
-          <strong className="text-white">Degraded</strong> — responded but latency exceeded 3 000ms. ·{" "}
-          <strong className="text-white">Down</strong> — 5xx or connection error. ·{" "}
-          <strong className="text-white">Unconfigured</strong> — API key not set in .env. ·{" "}
-          <strong className="text-white">Not Running</strong> — Ollama server is not running locally. Start it with{" "}
-          <code className="rounded bg-white/10 px-1 py-0.5 text-white">ollama serve</code>.
+        <p className="mt-3 text-xs text-[var(--ink-secondary)]">
+          <strong className="text-[var(--ink)]">Operational</strong> — endpoint responded in under 3 s with a non-5xx status. ·{" "}
+          <strong className="text-[var(--ink)]">Degraded</strong> — responded but latency exceeded 3 000ms. ·{" "}
+          <strong className="text-[var(--ink)]">Down</strong> — 5xx or connection error. ·{" "}
+          <strong className="text-[var(--ink)]">Unconfigured</strong> — API key not set in .env. ·{" "}
+          <strong className="text-[var(--ink)]">Not Running</strong> — Ollama server is not running locally. Start it with{" "}
+          <code className="rounded bg-[var(--surface-strong)] px-1 py-0.5 text-[var(--ink)]">ollama serve</code>.
         </p>
       </div>
     </>

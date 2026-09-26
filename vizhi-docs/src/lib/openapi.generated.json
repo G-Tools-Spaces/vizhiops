@@ -1,0 +1,1251 @@
+{
+  "generatedAt": "2026-09-25T08:26:19.144Z",
+  "title": "Vizhi API Gateway",
+  "version": "1.0.0",
+  "groups": [
+    {
+      "tag": "auth",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/v1/auth/signup",
+          "summary": "Signup",
+          "description": "",
+          "operationId": "signup_v1_auth_signup_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "email",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "password",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "201",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/login",
+          "summary": "Login",
+          "description": "",
+          "operationId": "login_v1_auth_login_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "email",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "password",
+              "type": "string",
+              "required": true,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/google",
+          "summary": "Google Login",
+          "description": "",
+          "operationId": "google_login_v1_auth_google_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "id_token",
+              "type": "string",
+              "required": true,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/auth/me",
+          "summary": "Me",
+          "description": "",
+          "operationId": "me_v1_auth_me_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/logout",
+          "summary": "Logout",
+          "description": "",
+          "operationId": "logout_v1_auth_logout_post",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "204",
+              "description": "Successful Response"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "agents",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/agents",
+          "summary": "List Agents",
+          "description": "List all agents.",
+          "operationId": "list_agents_v1_agents_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/agents",
+          "summary": "Create Agent",
+          "description": "Create a new agent and generate an API key.",
+          "operationId": "create_agent_v1_agents_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "name",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "description",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "tags",
+              "type": "string",
+              "required": false,
+              "description": "Comma-separated tags",
+              "default": ""
+            },
+            {
+              "name": "token_name",
+              "type": "string | null",
+              "required": false,
+              "description": "Optional friendly label for this token"
+            }
+          ],
+          "responses": [
+            {
+              "status": "201",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/agents/{agent_id}",
+          "summary": "Get Agent",
+          "description": "Get a single agent by agent_id (CID).",
+          "operationId": "get_agent_v1_agents__agent_id__get",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/agents/{agent_id}",
+          "summary": "Update Agent",
+          "description": "Update agent fields.",
+          "operationId": "update_agent_v1_agents__agent_id__patch",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "name",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "description",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "tags",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "status",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/agents/{agent_id}",
+          "summary": "Delete Agent",
+          "description": "Delete an agent by its CID.",
+          "operationId": "delete_agent_v1_agents__agent_id__delete",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "204",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/agents/{agent_id}/revoke",
+          "summary": "Revoke Agent",
+          "description": "Revoke an agent token — it immediately becomes unusable for authentication.",
+          "operationId": "revoke_agent_v1_agents__agent_id__revoke_post",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/agents/{agent_id}/rotate",
+          "summary": "Rotate Agent",
+          "description": "Rotate the API key for an agent.\n\nGenerates a new cryptographically secure key, hashes it, and atomically\nmarks the old key as revoked.  The new plaintext key is returned once —\nstore it immediately.",
+          "operationId": "rotate_agent_v1_agents__agent_id__rotate_post",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/agents/{agent_id}/budget",
+          "summary": "Get Agent Budget",
+          "description": "Return the current budget configuration and usage for an agent.",
+          "operationId": "get_agent_budget_v1_agents__agent_id__budget_get",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/agents/{agent_id}/budget",
+          "summary": "Update Agent Budget",
+          "description": "Set or clear the spending budget for an agent.\n\nSend `clear: true` to remove all limits. Otherwise provide\n`budget_usd` and/or `budget_tokens` to set limits.",
+          "operationId": "update_agent_budget_v1_agents__agent_id__budget_patch",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "budget_usd",
+              "type": "number | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "budget_tokens",
+              "type": "integer | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "budget_reset_at",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "clear",
+              "type": "boolean",
+              "required": false,
+              "description": "",
+              "default": false
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "agent-queue",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/agents/register",
+          "summary": "Register Agent",
+          "description": "",
+          "operationId": "register_agent_agents_register_post",
+          "parameters": [
+            {
+              "name": "X-Agent-CID",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "X-Agent-Token",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "agent_id",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "device_name",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "os_name",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "agent_version",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "available_engines",
+              "type": "array[string]",
+              "required": false,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/agents/heartbeat",
+          "summary": "Agent Heartbeat",
+          "description": "",
+          "operationId": "agent_heartbeat_agents_heartbeat_post",
+          "parameters": [
+            {
+              "name": "X-Agent-CID",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "X-Agent-Token",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "agent_id",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "device_name",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "os_name",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "agent_version",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "available_engines",
+              "type": "array[string]",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": "online"
+            },
+            {
+              "name": "active_job_id",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "active_engine",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "queue_depth",
+              "type": "integer",
+              "required": false,
+              "description": "",
+              "default": 0
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/jobs/next",
+          "summary": "Next Job",
+          "description": "",
+          "operationId": "next_job_jobs_next_get",
+          "parameters": [
+            {
+              "name": "X-Agent-CID",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "X-Agent-Token",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/jobs/submit",
+          "summary": "Submit Job Completion",
+          "description": "",
+          "operationId": "submit_job_completion_jobs_submit_post",
+          "parameters": [
+            {
+              "name": "X-Agent-CID",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "X-Agent-Token",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "job_id",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": "completed"
+            },
+            {
+              "name": "output",
+              "type": "object",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "error",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            },
+            {
+              "name": "usage",
+              "type": "object",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "completed_at",
+              "type": "string",
+              "required": false,
+              "description": "",
+              "default": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "chat",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "summary": "Chat Completions",
+          "description": "OpenRouter-style chat completion gateway.\n\nModel tokens continue to resolve providers directly.\nAgent tokens are queued and fulfilled by the on-site agent.",
+          "operationId": "chat_completions_v1_chat_completions_post",
+          "parameters": [
+            {
+              "name": "X-Agent-CID",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "X-Agent-Token",
+              "in": "header",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "model",
+              "type": "string | null",
+              "required": false,
+              "description": "Optional for model-token calls. Agent-token calls must provide it."
+            },
+            {
+              "name": "messages",
+              "type": "array[object]",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "call_sdk",
+              "type": "string | null",
+              "required": false,
+              "description": "SDK adapter hint: openai-sdk, claude-sdk, raw-http"
+            },
+            {
+              "name": "temperature",
+              "type": "number",
+              "required": false,
+              "description": "",
+              "default": 1
+            },
+            {
+              "name": "max_tokens",
+              "type": "integer | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "stream",
+              "type": "boolean",
+              "required": false,
+              "description": "When true, the response is streamed as Server-Sent Events (SSE). Each chunk is an OpenAI-compatible `data: {...}` line terminated by `data: [DONE]`.",
+              "default": false
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "models",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/models",
+          "summary": "List Models",
+          "description": "List all registered model connections.",
+          "operationId": "list_models_v1_models_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/models",
+          "summary": "Create Model Connection",
+          "description": "",
+          "operationId": "create_model_connection_v1_models_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "provider",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "model_name",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "token_name",
+              "type": "string | null",
+              "required": false,
+              "description": "Optional friendly label for this token"
+            },
+            {
+              "name": "metadata",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "201",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/models/{model_id}/revoke",
+          "summary": "Revoke Model Connection",
+          "description": "Revoke a model token — it immediately becomes unusable for authentication.",
+          "operationId": "revoke_model_connection_v1_models__model_id__revoke_post",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/models/{model_id}/rotate",
+          "summary": "Rotate Model Connection",
+          "description": "Rotate the API key for a model connection.\n\nGenerates a new cryptographically secure key, hashes it, and atomically\nre-activates the token.  The new plaintext key is returned once — store it\nimmediately.",
+          "operationId": "rotate_model_connection_v1_models__model_id__rotate_post",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/models/registry",
+          "summary": "Model Registry",
+          "description": "Return provider/model options for client dropdowns.",
+          "operationId": "model_registry_v1_models_registry_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/models/{model_id}/usage",
+          "summary": "Get Model Usage",
+          "description": "Get detailed usage statistics and query history for a model connection.",
+          "operationId": "get_model_usage_v1_models__model_id__usage_get",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "type": "integer",
+              "description": "",
+              "default": 50
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/models/{model_id}",
+          "summary": "Delete Model Connection",
+          "description": "",
+          "operationId": "delete_model_connection_v1_models__model_id__delete",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "204",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/models/{model_id}/budget",
+          "summary": "Get Model Budget",
+          "description": "Return the current budget configuration and usage for a model token.",
+          "operationId": "get_model_budget_v1_models__model_id__budget_get",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/models/{model_id}/budget",
+          "summary": "Update Model Budget",
+          "description": "Set or clear the spending budget for a model token.\n\nSend `clear: true` to remove all limits.",
+          "operationId": "update_model_budget_v1_models__model_id__budget_patch",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "budget_usd",
+              "type": "number | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "budget_tokens",
+              "type": "integer | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "budget_reset_at",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "clear",
+              "type": "boolean",
+              "required": false,
+              "description": "",
+              "default": false
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "queries",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/queries",
+          "summary": "List Queries",
+          "description": "List queries with optional filters.",
+          "operationId": "list_queries_v1_queries_get",
+          "parameters": [
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "model",
+              "in": "query",
+              "required": false,
+              "type": "string | null",
+              "description": ""
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "type": "integer",
+              "description": "",
+              "default": 50
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/queries/{query_id}",
+          "summary": "Get Query",
+          "description": "Get a single query + response by ID.",
+          "operationId": "get_query_v1_queries__query_id__get",
+          "parameters": [
+            {
+              "name": "query_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "health",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/health/providers",
+          "summary": "Get Provider Health",
+          "description": "Return the current health status of all configured AI providers.\n\nResults are served from the in-memory cache updated every 60 seconds\nby the background health-check loop.",
+          "operationId": "get_provider_health_v1_health_providers_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/health/providers/refresh",
+          "summary": "Refresh Provider Health",
+          "description": "Force an immediate health probe of all providers and return fresh results.\nUseful for the frontend 'Refresh' button.",
+          "operationId": "refresh_provider_health_v1_health_providers_refresh_post",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "metrics",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/metrics",
+          "summary": "Get Metrics",
+          "description": "Return aggregated metrics: timeseries + recent requests.",
+          "operationId": "get_metrics_v1_metrics_get",
+          "parameters": [
+            {
+              "name": "time_range",
+              "in": "query",
+              "required": false,
+              "type": "string",
+              "description": "Time range: 1h, 24h, 7d, 30d",
+              "default": "24h"
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "type": "string | null",
+              "description": "Filter by agent CID"
+            },
+            {
+              "name": "model_id",
+              "in": "query",
+              "required": false,
+              "type": "string | null",
+              "description": "Filter by model name"
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "dashboard",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/dashboard",
+          "summary": "Get Dashboard",
+          "description": "Combined dashboard payload: totals + metric series + recent requests.\n\nThis endpoint returns the exact shape the frontend ``useDashboard()`` expects.",
+          "operationId": "get_dashboard_v1_dashboard_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

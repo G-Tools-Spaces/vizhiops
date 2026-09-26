@@ -256,7 +256,7 @@ export default function PlaygroundPage() {
         {/* ── Config Panel ──────────────────────────────────────────────── */}
         <aside className="space-y-4">
           <Card className="p-4 space-y-4">
-            <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
+            <p className="text-xs font-semibold text-[var(--ink-tertiary)] uppercase tracking-wider">
               Configuration
             </p>
 
@@ -326,11 +326,11 @@ export default function PlaygroundPage() {
           </Card>
 
           {/* Tips */}
-          <Card className="p-4 space-y-2 text-xs text-[var(--muted)]">
-            <p className="font-semibold text-white">Tips</p>
+          <Card className="p-4 space-y-2 text-xs text-[var(--ink-tertiary)]">
+            <p className="font-semibold text-[var(--ink)]">Tips</p>
             <p>• Get a <strong>Model Token</strong> from Models → Tokens.</p>
             <p>• <strong>Stream=true</strong> is always used for real-time output.</p>
-            <p>• Press <kbd className="font-mono bg-white/10 px-1 rounded">Enter</kbd> to send, <kbd className="font-mono bg-white/10 px-1 rounded">Shift+Enter</kbd> for newline.</p>
+            <p>• Press <kbd className="font-mono bg-[var(--surface-strong)] px-1 rounded">Enter</kbd> to send, <kbd className="font-mono bg-[var(--surface-strong)] px-1 rounded">Shift+Enter</kbd> for newline.</p>
             <p>• Click <strong>Stop</strong> to cancel mid-stream.</p>
           </Card>
         </aside>
@@ -340,7 +340,7 @@ export default function PlaygroundPage() {
           {/* Messages */}
           <Card className="flex-1 min-h-[480px] max-h-[640px] overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
-              <div className="flex h-full items-center justify-center text-center text-sm text-[var(--muted)]">
+              <div className="flex h-full items-center justify-center text-center text-sm text-[var(--ink-tertiary)]">
                 <div>
                   <Zap className="mx-auto mb-3 h-8 w-8 opacity-30" />
                   <p>No messages yet.</p>
@@ -368,8 +368,8 @@ export default function PlaygroundPage() {
                     className={cn(
                       "rounded-xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
                       msg.role === "user"
-                        ? "bg-[var(--accent)] text-black"
-                        : "bg-white/[0.06] text-[var(--foreground)]"
+                        ? "bg-[var(--brand)] text-[var(--brand-ink)]"
+                        : "bg-[var(--surface-strong)] text-[var(--ink)]"
                     )}
                   >
                     {msg.content}
@@ -380,29 +380,29 @@ export default function PlaygroundPage() {
 
                   {/* Metadata badge shown when stream is done */}
                   {msg.role === "assistant" && !msg.streaming && msg.meta && (
-                    <div className="flex flex-wrap gap-2 text-[10px] text-[var(--muted)]">
+                    <div className="flex flex-wrap gap-2 text-[10px] text-[var(--ink-tertiary)]">
                       {msg.meta.provider && (
-                        <span className="rounded bg-white/[0.05] px-1.5 py-0.5">
+                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
                           {msg.meta.provider}
                         </span>
                       )}
                       {msg.meta.model && (
-                        <span className="rounded bg-white/[0.05] px-1.5 py-0.5">
+                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
                           {msg.meta.model}
                         </span>
                       )}
                       {msg.meta.usedFallback && (
-                        <span className="rounded bg-yellow-500/20 px-1.5 py-0.5 text-yellow-400">
+                        <span className="rounded bg-[var(--warn-soft)] px-1.5 py-0.5 text-[var(--warn)]">
                           fallback used
                         </span>
                       )}
                       {msg.meta.latencyMs != null && (
-                        <span className="rounded bg-white/[0.05] px-1.5 py-0.5">
+                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
                           {msg.meta.latencyMs}ms
                         </span>
                       )}
                       {msg.meta.queryId && (
-                        <span className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono">
+                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5 font-mono">
                           {msg.meta.queryId.slice(0, 16)}…
                         </span>
                       )}
@@ -411,7 +411,7 @@ export default function PlaygroundPage() {
                 </div>
 
                 {msg.role === "user" && (
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
+                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface-strong)] text-[var(--ink)]">
                     <User className="h-4 w-4" />
                   </span>
                 )}
@@ -419,7 +419,7 @@ export default function PlaygroundPage() {
             ))}
 
             {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+              <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
                 {error}
               </div>
             )}
@@ -437,7 +437,7 @@ export default function PlaygroundPage() {
               onKeyDown={onKeyDown}
               disabled={isStreaming}
               className={cn(
-                "flex-1 resize-none bg-transparent text-sm text-white placeholder:text-[var(--muted)] outline-none disabled:opacity-50"
+                "flex-1 resize-none bg-transparent text-sm text-[var(--ink)] placeholder:text-[var(--ink-tertiary)] outline-none disabled:opacity-50"
               )}
             />
 
@@ -482,11 +482,11 @@ export default function PlaygroundPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-medium text-[var(--muted)]">{label}</label>
+      <label className="block text-xs font-medium text-[var(--ink-tertiary)]">{label}</label>
       {children}
     </div>
   );
 }
 
 const inputCls =
-  "w-full rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition";
+  "w-full rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-tertiary)] outline-none focus:border-[var(--brand)] transition";

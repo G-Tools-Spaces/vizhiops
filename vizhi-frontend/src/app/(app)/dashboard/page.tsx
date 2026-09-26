@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Bot, Cpu, KeyRound, Layers } from "lucide-reac
 import { RequestTimeline, TokenTimeline } from "@/components/shared/chart-panel";
 import { DataTable } from "@/components/shared/data-table";
 import { MetricCard } from "@/components/shared/metric-card";
+import { OnboardingChecklist } from "@/components/shared/onboarding-checklist";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useAgents, useDashboard, useModels } from "@/lib/api/queries";
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader title="Dashboard" description="High-level observability across model access, agent usage, token consumption, failures, and live request flow." />
+      <OnboardingChecklist />
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard label="Total Agents" value={String(totals?.agents ?? 0)} hint="Observable identities" icon={Bot} />
         <MetricCard label="Model Tokens" value={String(totals?.modelTokens ?? 0)} hint="Reusable LLM access" icon={KeyRound} />
@@ -37,6 +39,7 @@ export default function DashboardPage() {
       </section>
       <section className="mt-6">
         <DataTable
+          tableId="dashboard-requests"
           headers={["Request ID", "Agent", "Model", "Status", "Latency", "Cost"]}
           rows={(data?.recentRequests ?? []).map((request) => [
             <span className="font-mono text-xs" key="id">{request.id}</span>,

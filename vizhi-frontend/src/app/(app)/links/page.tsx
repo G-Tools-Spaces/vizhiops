@@ -49,6 +49,7 @@ export default function LinksPage() {
           </CardContent>
         </Card>
         <DataTable
+          tableId="links"
           headers={["Agent", "Model", "Created", "Status", "Requests", "Tokens", "Actions"]}
           rows={links.map((link) => [
             agents.find((agent) => agent.id === link.agentId)?.name,
