@@ -1,16 +1,44 @@
-"""Database initialization — creates tables on the configured database."""
+"""Database initialization — schema is managed by Alembic migrations.
+
+On startup the backend runs ``alembic upgrade head`` against the configured
+``DATABASE_URL``, so Supabase (production) and SQLite (local) always converge
+on the same schema — whichever database you point at, it is migrated to the
+latest revision automatically.
+
+Databases created before Alembic existed (tables present, no
+``alembic_version``) are adopted by stamping them at head first.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from pathlib import Path
 
-from sqlalchemy import text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect, text
 
 from app.config.settings import settings
 from app.db.session import engine
-from app.models.db_models import Base
 
 logger = logging.getLogger("vizhi.db")
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _alembic_config() -> Config:
+    cfg = Config(str(_BACKEND_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(_BACKEND_ROOT / "alembic"))
+    return cfg
+
+
+def _stamp_head() -> None:
+    command.stamp(_alembic_config(), "head")
+
+
+def _upgrade_head() -> None:
+    command.upgrade(_alembic_config(), "head")
 
 
 async def _sync_sqlite_agents_schema(conn) -> None:
@@ -93,12 +121,25 @@ async def _ensure_sqlite_column(
 
 
 async def init_db() -> None:
-    """Create tables on the one configured database."""
+    """Migrate the configured database to the latest schema revision."""
 
     logger.info("Initializing database...")
+
+    # Adopt pre-Alembic databases: tables exist but no migration history —
+    # stamp them at head instead of trying to re-create everything.
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        if settings.database_url.startswith("sqlite"):
+        tables = set(await conn.run_sync(lambda c: inspect(c).get_table_names()))
+    if tables and "alembic_version" not in tables:
+        logger.info("Existing database without Alembic history — stamping at head")
+        await asyncio.to_thread(_stamp_head)
+
+    # Fresh databases get every table here; managed ones get new migrations.
+    # (Runs in a thread: alembic's async env.py calls asyncio.run() itself.)
+    await asyncio.to_thread(_upgrade_head)
+
+    # Legacy repairs for old SQLite dev databases (no-op on fresh schemas).
+    if settings.database_url.startswith("sqlite"):
+        async with engine.begin() as conn:
             await _ensure_sqlite_column(
                 conn,
                 table_name="agents",

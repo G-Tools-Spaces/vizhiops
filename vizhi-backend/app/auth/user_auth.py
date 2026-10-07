@@ -62,6 +62,7 @@ def user_to_response(user: UserRow) -> UserResponse:
         email_verified=bool(user.email_verified),
         name=user.name or "",
         avatar_url=user.avatar_url or "",
+        role=user.role or "user",
     )
 
 
@@ -139,6 +140,16 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User no longer exists",
+        )
+    return user
+
+
+async def require_admin(user: UserRow = Depends(get_current_user)) -> UserRow:
+    """Gate for admin-only endpoints (e.g. model catalog management)."""
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
         )
     return user
 

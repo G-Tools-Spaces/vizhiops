@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.api_key import generate_api_key, hash_api_key, mask_api_key
 from app.auth.user_auth import get_current_user
 from app.db.session import get_db
-from app.models.db_models import ModelConnectionRow, UserRow
+from app.models.db_models import (
+    CatalogModelRow,
+    CatalogProviderRow,
+    ModelConnectionRow,
+    UserRow,
+)
 from app.schemas.requests import CreateModelConnectionRequest
 from app.schemas.responses import (
     ModelConnectionCreatedResponse,
@@ -28,140 +33,50 @@ from app.services.budget import get_model_budget_status
 router = APIRouter(prefix="/v1/models", tags=["models"])
 
 
-_MODEL_CATALOG: list[dict] = [
-    # ── Paid / API-key providers ──────────────────────────────────────────
-    {
-        "id": "openai",
-        "label": "OpenAI",
-        "models": [
-            {"id": "openai/gpt-4o", "label": "gpt-4o"},
-            {"id": "openai/gpt-4o-mini", "label": "gpt-4o-mini"},
-            {"id": "openai/gpt-4.1", "label": "gpt-4.1"},
-            {"id": "openai/gpt-4.1-mini", "label": "gpt-4.1-mini"},
-            {"id": "openai/gpt-4.1-nano", "label": "gpt-4.1-nano"},
-            {"id": "openai/o3", "label": "o3"},
-            {"id": "openai/o3-mini", "label": "o3-mini"},
-            {"id": "openai/o4-mini", "label": "o4-mini"},
-        ],
-    },
-    {
-        "id": "claude",
-        "label": "Claude (Anthropic)",
-        "models": [
-            {"id": "anthropic/claude-sonnet-4-20250514", "label": "claude-sonnet-4"},
-            {"id": "anthropic/claude-3-5-sonnet-20241022", "label": "claude-3.5-sonnet"},
-            {"id": "anthropic/claude-3-5-haiku-20241022", "label": "claude-3.5-haiku"},
-            {"id": "anthropic/claude-3-haiku-20240307", "label": "claude-3-haiku"},
-        ],
-    },
-    {
-        "id": "gemini",
-        "label": "Gemini (Google)",
-        "models": [
-            {"id": "gemini/gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
-            {"id": "gemini/gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
-            {"id": "gemini/gemini-2.0-flash", "label": "Gemini 2.0 Flash"},
-            {"id": "gemini/gemini-1.5-pro", "label": "Gemini 1.5 Pro"},
-            {"id": "gemini/gemini-1.5-flash", "label": "Gemini 1.5 Flash"},
-        ],
-    },
-    {
-        "id": "qwen",
-        "label": "Qwen (Alibaba)",
-        "models": [
-            {"id": "qwen/qwen-plus", "label": "Qwen Plus"},
-            {"id": "qwen/qwen-turbo", "label": "Qwen Turbo"},
-            {"id": "qwen/qwen-max", "label": "Qwen Max"},
-            {"id": "qwen/qwen2.5-72b-instruct", "label": "Qwen 2.5 72B Instruct"},
-            {"id": "qwen/qwen2.5-32b-instruct", "label": "Qwen 2.5 32B Instruct"},
-        ],
-    },
-    # ── Free / Open Models via HuggingFace ────────────────────────────────
-    {
-        "id": "huggingface",
-        "label": "🤗 Open Models (Free via HuggingFace)",
-        "models": [
-            {
-                "id": "huggingface/meta-llama/Llama-3.1-8B-Instruct",
-                "label": "Llama 3.1 8B Instruct (Free)",
-            },
-            {
-                "id": "huggingface/meta-llama/Llama-3.2-3B-Instruct",
-                "label": "Llama 3.2 3B Instruct (Free)",
-            },
-            {
-                "id": "huggingface/mistralai/Mistral-7B-Instruct-v0.3",
-                "label": "Mistral 7B Instruct (Free)",
-            },
-            {
-                "id": "huggingface/mistralai/Mixtral-8x7B-Instruct-v0.1",
-                "label": "Mixtral 8x7B MoE (Free)",
-            },
-            {
-                "id": "huggingface/Qwen/Qwen2.5-7B-Instruct",
-                "label": "Qwen 2.5 7B Instruct (Free)",
-            },
-            {
-                "id": "huggingface/Qwen/Qwen2.5-Coder-7B-Instruct",
-                "label": "Qwen 2.5 Coder 7B (Free)",
-            },
-            {
-                "id": "huggingface/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-                "label": "DeepSeek R1 Distill 7B (Free)",
-            },
-        ],
-    },
-    # ── Legacy named providers (kept for backward compat) ─────────────────
-    {
-        "id": "llama",
-        "label": "Llama (via HuggingFace)",
-        "models": [
-            {
-                "id": "llama/meta-llama/Llama-3.1-8B-Instruct",
-                "label": "Llama 3.1 8B Instruct",
-            },
-            {
-                "id": "llama/meta-llama/Llama-3.2-3B-Instruct",
-                "label": "Llama 3.2 3B Instruct",
-            },
-        ],
-    },
-    {
-        "id": "mistral",
-        "label": "Mistral (via HuggingFace)",
-        "models": [
-            {
-                "id": "mistral/mistralai/Mistral-7B-Instruct-v0.3",
-                "label": "Mistral 7B Instruct",
-            },
-            {
-                "id": "mistral/mistralai/Mixtral-8x7B-Instruct-v0.1",
-                "label": "Mixtral 8x7B Instruct",
-            },
-        ],
-    },
-    {
-        "id": "deepseek",   
-        "label": "DeepSeek",
-        "id": "deepseek",
-        "label": "DeepSeek (via HuggingFace)",
-        "id": "deepseek",   
-        "label": "DeepSeek",
-        "models": [
-            {
-                "id": "deepseek/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-                "label": "DeepSeek R1 Distill Qwen 7B",
-            },
-        ],
-    },
-]
+# ── DB-backed model catalog ──────────────────────────────────────────────
+# The catalog lives in the `catalog_providers` / `catalog_models` tables and
+# is managed through the admin console (`/v1/admin/catalog/*`). Changes take
+# effect immediately — no redeploy needed.
 
 
-def _catalog_model_ids(provider_id: str) -> set[str]:
-    for provider in _MODEL_CATALOG:
-        if provider["id"] == provider_id:
-            return {model["id"] for model in provider["models"]}
-    return set()
+async def _fetch_catalog(db: AsyncSession) -> list[dict]:
+    """Enabled providers + models in display order (registry response shape)."""
+    providers_result = await db.execute(
+        select(CatalogProviderRow)
+        .where(CatalogProviderRow.enabled == 1)
+        .order_by(CatalogProviderRow.sort_order, CatalogProviderRow.id)
+    )
+    providers = providers_result.scalars().all()
+
+    models_result = await db.execute(
+        select(CatalogModelRow)
+        .where(CatalogModelRow.enabled == 1)
+        .order_by(CatalogModelRow.sort_order, CatalogModelRow.id)
+    )
+    models_by_provider: dict[str, list[dict]] = {}
+    for model in models_result.scalars().all():
+        models_by_provider.setdefault(model.provider_id, []).append(
+            {"id": model.id, "label": model.label}
+        )
+
+    return [
+        {
+            "id": provider.id,
+            "label": provider.label,
+            "models": models_by_provider.get(provider.id, []),
+        }
+        for provider in providers
+    ]
+
+
+async def _catalog_model_ids(db: AsyncSession, provider_id: str) -> set[str]:
+    result = await db.execute(
+        select(CatalogModelRow.id).where(
+            CatalogModelRow.provider_id == provider_id,
+            CatalogModelRow.enabled == 1,
+        )
+    )
+    return set(result.scalars().all())
 
 
 def _row_to_response(row: ModelConnectionRow) -> ModelConnectionResponse:
@@ -186,7 +101,7 @@ async def create_model_connection(
     db: AsyncSession = Depends(get_db),
 ) -> ModelConnectionCreatedResponse:
     provider_id = body.provider.lower()
-    if body.model_name not in _catalog_model_ids(provider_id):
+    if body.model_name not in await _catalog_model_ids(db, provider_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Model is not available for the selected provider",
@@ -291,9 +206,9 @@ async def list_models(
     return [_row_to_response(row) for row in result.scalars().all()]
 
 @router.get("/registry")
-async def model_registry() -> list[dict]:
-    """Return provider/model options for client dropdowns."""
-    return _MODEL_CATALOG
+async def model_registry(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    """Return provider/model options for client dropdowns (from the DB catalog)."""
+    return await _fetch_catalog(db)
 
 @router.get("/{model_id}/usage")
 async def get_model_usage(

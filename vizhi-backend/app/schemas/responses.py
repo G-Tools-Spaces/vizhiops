@@ -14,6 +14,7 @@ class UserResponse(BaseModel):
     email_verified: bool
     name: str = ""
     avatar_url: str = ""
+    role: str = "user"
 
 
 class AuthResponse(BaseModel):

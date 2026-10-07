@@ -34,3 +34,31 @@ backend model id:
 ```env
 INFERENCE_MODEL_MAP={"qwen/qwen-plus":"Qwen/Qwen2.5-7B-Instruct:fastest"}
 ```
+
+## Database & migrations (Alembic)
+
+The schema is managed by **Alembic**. On startup the backend runs
+`alembic upgrade head` against `DATABASE_URL`, so Supabase and local SQLite
+always converge on the same schema automatically.
+
+```env
+# Supabase (session pooler — SSL is handled automatically)
+DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+
+# Local SQLite fallback
+# DATABASE_URL=sqlite+aiosqlite:///./vizhi.db
+```
+
+Making a schema change:
+
+```bash
+cd vizhi-backend
+.venv/bin/alembic revision --autogenerate -m "describe the change"
+.venv/bin/alembic upgrade head        # apply now (also applied on next startup)
+```
+
+Useful commands: `alembic current` (applied revision), `alembic history`
+(all revisions), `alembic downgrade -1` (roll back one).
+
+> Databases created before Alembic are adopted automatically: on first startup
+> they are stamped at head, then migrated normally.

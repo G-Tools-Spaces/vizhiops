@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/*
+ * Vizhi Admin design system — same language as the main console:
+ * near-white canvas, hairline borders, 6px radii, single iris brand colour.
+ */
+
+:root {
+  color-scheme: light;
+
+  --canvas: #fafbfd;
+  --panel: #ffffff;
+  --surface: #f6f7fa;
+  --surface-strong: #eef0f5;
+
+  --ink: #16181d;
+  --ink-secondary: #5d6470;
+  --ink-tertiary: #878e9b;
+
+  --line: #e7e9ef;
+  --line-soft: #f0f1f5;
+
+  --brand: #5457e0;
+  --brand-hover: #4648c9;
+  --brand-ink: #ffffff;
+  --accent: #4f52d6;
+  --accent-hover: #4043b8;
+  --accent-soft: #eeeefc;
+
+  --ok: #0a7c42;
+  --ok-soft: #edf9f3;
+  --warn: #8f6a1e;
+  --warn-soft: #fdf6e6;
+  --danger: #c33d34;
+  --danger-soft: #fdf2f1;
+  --info: #2a6fb0;
+  --info-soft: #eff5fb;
+
+  --muted: #5d6470;
+  --muted-soft: #eef0f5;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #0c0e13;
+  --panel: #12151c;
+  --surface: #171b24;
+  --surface-strong: #1d222d;
+
+  --ink: #f3f5f8;
+  --ink-secondary: #9aa3b2;
+  --ink-tertiary: #6d7686;
+
+  --line: #232936;
+  --line-soft: #1a1f29;
+
+  --brand: #6f72f0;
+  --brand-hover: #8a8df5;
+  --brand-ink: #0a0a14;
+  --accent: #9b9df6;
+  --accent-hover: #b6b7fa;
+  --accent-soft: rgba(111, 114, 240, 0.14);
+
+  --ok: #4fd1a5;
+  --ok-soft: rgba(79, 209, 165, 0.12);
+  --warn: #f5c451;
+  --warn-soft: rgba(245, 196, 81, 0.12);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.12);
+  --info: #7cc7ff;
+  --info-soft: rgba(124, 199, 255, 0.12);
+
+  --muted: #9aa3b2;
+  --muted-soft: #1d222d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
