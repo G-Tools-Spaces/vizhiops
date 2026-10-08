@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 
 from app.auth.user_auth import get_current_user
 from app.db.session import get_db
@@ -43,6 +44,28 @@ async def list_queries(
             select(ResponseRow).where(ResponseRow.query_id == q.id)
         )
         r = r_result.scalars().first()
+
+        try:
+            prompt: list[dict] = json.loads(q.input_messages) if q.input_messages else []
+        except (json.JSONDecodeError, TypeError):
+            prompt = []
+
+        response_text = ""
+        if r and r.response:
+            try:
+                resp_data = json.loads(r.response)
+                if isinstance(resp_data, dict):
+                    if "choices" in resp_data and resp_data["choices"]:
+                        choice = resp_data["choices"][0]
+                        if "message" in choice and "content" in choice["message"]:
+                            response_text = choice["message"]["content"] or ""
+                        elif "text" in choice:
+                            response_text = choice["text"] or ""
+                    elif "content" in resp_data:
+                        response_text = str(resp_data["content"])
+            except (json.JSONDecodeError, TypeError, KeyError):
+                response_text = (r.response or "")[:500]
+
         items.append(
             RequestEventResponse(
                 id=q.id,
@@ -57,6 +80,8 @@ async def list_queries(
                 output_tokens=r.output_tokens if r else 0,
                 estimated_cost=r.estimated_cost if r else 0.0,
                 error_message=r.error_message if r else None,
+                prompt=prompt,
+                response_text=response_text,
             )
         )
     return items
@@ -81,6 +106,27 @@ async def get_query(
     )
     r = r_result.scalars().first()
 
+    try:
+        prompt: list[dict] = json.loads(q.input_messages) if q.input_messages else []
+    except (json.JSONDecodeError, TypeError):
+        prompt = []
+
+    response_text = ""
+    if r and r.response:
+        try:
+            resp_data = json.loads(r.response)
+            if isinstance(resp_data, dict):
+                if "choices" in resp_data and resp_data["choices"]:
+                    choice = resp_data["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        response_text = choice["message"]["content"] or ""
+                    elif "text" in choice:
+                        response_text = choice["text"] or ""
+                elif "content" in resp_data:
+                    response_text = str(resp_data["content"])
+        except (json.JSONDecodeError, TypeError, KeyError):
+            response_text = (r.response or "")[:500]
+
     return RequestEventResponse(
         id=q.id,
         timestamp=q.timestamp.isoformat() if q.timestamp else "",
@@ -94,4 +140,6 @@ async def get_query(
         output_tokens=r.output_tokens if r else 0,
         estimated_cost=r.estimated_cost if r else 0.0,
         error_message=r.error_message if r else None,
+        prompt=prompt,
+        response_text=response_text,
     )

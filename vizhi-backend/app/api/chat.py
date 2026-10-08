@@ -39,6 +39,39 @@ from app.services.router import provider_router, FallbackResult
 from app.services.budget import check_agent_budget, check_model_budget
 from app.providers.base import ProviderResponse
 
+
+def _parse_sse_payload(line: str) -> dict | None:
+    trimmed = line.strip()
+    if not trimmed.startswith("data: "):
+        return None
+    payload = trimmed[6:]
+    if not payload or payload == "[DONE]":
+        return None
+    try:
+        return json.loads(payload)
+    except Exception:
+        return None
+
+
+def _extract_sse_text(payload: dict) -> str:
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] or {}
+        delta = first.get("delta") or {}
+        if isinstance(delta, dict) and delta.get("content") is not None:
+            return str(delta.get("content") or "")
+    return ""
+
+
+def _extract_sse_finish_reason(payload: dict) -> str | None:
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] or {}
+        finish_reason = first.get("finish_reason")
+        if finish_reason is not None:
+            return str(finish_reason)
+    return None
+
 router = APIRouter(prefix="/v1", tags=["chat"])
 logger = logging.getLogger(__name__)
 
@@ -174,6 +207,7 @@ async def chat_completions(
             usage_prompt_tokens = 0
             usage_completion_tokens = 0
             latency_ms = 0
+            finish_reason = "stop"
 
             try:
                 if settings.fallback_enabled:
@@ -195,28 +229,25 @@ async def chat_completions(
                     )
 
                 async for line in gen:
-                    trimmed = line.strip()
-                    if trimmed.startswith("data: "):
-                        payload = trimmed[6:]
-                        if payload and payload != "[DONE]":
-                            try:
-                                event = json.loads(payload)
-                                if event.get("model"):
-                                    final_model_name = event.get("model") or final_model_name
-                                if event.get("vizhi_metadata"):
-                                    vm = event["vizhi_metadata"] or {}
-                                    final_provider_name = vm.get("provider") or final_provider_name
-                                    final_model_name = vm.get("model") or final_model_name
-                                    latency_ms = int(vm.get("latency_ms") or latency_ms or 0)
-                                choice = (event.get("choices") or [{}])[0]
-                                delta = choice.get("delta") or {}
-                                if delta.get("content"):
-                                    chunks.append(delta["content"])
-                                usage = event.get("usage") or {}
-                                usage_prompt_tokens = int(usage.get("prompt_tokens") or usage_prompt_tokens or 0)
-                                usage_completion_tokens = int(usage.get("completion_tokens") or usage_completion_tokens or 0)
-                            except Exception:
-                                pass
+                    event = _parse_sse_payload(line)
+                    if event:
+                        if event.get("model"):
+                            final_model_name = event.get("model") or final_model_name
+                        if event.get("vizhi_metadata"):
+                            vm = event["vizhi_metadata"] or {}
+                            final_provider_name = vm.get("provider") or final_provider_name
+                            final_model_name = vm.get("model") or final_model_name
+                            latency_ms = int(vm.get("latency_ms") or latency_ms or 0)
+                        choice = (event.get("choices") or [{}])[0]
+                        token = _extract_sse_text(event)
+                        if token:
+                            chunks.append(token)
+                        parsed_finish_reason = _extract_sse_finish_reason(event)
+                        if parsed_finish_reason:
+                            finish_reason = parsed_finish_reason
+                        usage = event.get("usage") or {}
+                        usage_prompt_tokens = int(usage.get("prompt_tokens") or usage_prompt_tokens or 0)
+                        usage_completion_tokens = int(usage.get("completion_tokens") or usage_completion_tokens or 0)
                     yield (line + "\n\n").encode()
 
             except asyncio.CancelledError:
@@ -275,7 +306,7 @@ async def chat_completions(
                                 },
                                 input_tokens=usage_prompt_tokens,
                                 output_tokens=usage_completion_tokens,
-                                finish_reason="stop",
+                                finish_reason=finish_reason,
                                 latency_ms=latency_ms,
                             ),
                             status_code=200,
