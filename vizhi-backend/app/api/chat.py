@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -36,6 +37,7 @@ from app.services.persistence import (
 from app.config.settings import settings
 from app.services.router import provider_router, FallbackResult
 from app.services.budget import check_agent_budget, check_model_budget
+from app.providers.base import ProviderResponse
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -164,6 +166,15 @@ async def chat_completions(
         await db.commit()
 
         async def _event_stream() -> AsyncGenerator[bytes, None]:
+            final_provider_name = provider_name
+            final_model_name = resolved_model
+            chunks: list[str] = []
+            stream_error: str | None = None
+            was_cancelled = False
+            usage_prompt_tokens = 0
+            usage_completion_tokens = 0
+            latency_ms = 0
+
             try:
                 if settings.fallback_enabled:
                     gen = provider_router.chat_with_fallback_stream(
@@ -184,15 +195,96 @@ async def chat_completions(
                     )
 
                 async for line in gen:
+                    trimmed = line.strip()
+                    if trimmed.startswith("data: "):
+                        payload = trimmed[6:]
+                        if payload and payload != "[DONE]":
+                            try:
+                                event = json.loads(payload)
+                                if event.get("model"):
+                                    final_model_name = event.get("model") or final_model_name
+                                if event.get("vizhi_metadata"):
+                                    vm = event["vizhi_metadata"] or {}
+                                    final_provider_name = vm.get("provider") or final_provider_name
+                                    final_model_name = vm.get("model") or final_model_name
+                                    latency_ms = int(vm.get("latency_ms") or latency_ms or 0)
+                                choice = (event.get("choices") or [{}])[0]
+                                delta = choice.get("delta") or {}
+                                if delta.get("content"):
+                                    chunks.append(delta["content"])
+                                usage = event.get("usage") or {}
+                                usage_prompt_tokens = int(usage.get("prompt_tokens") or usage_prompt_tokens or 0)
+                                usage_completion_tokens = int(usage.get("completion_tokens") or usage_completion_tokens or 0)
+                            except Exception:
+                                pass
                     yield (line + "\n\n").encode()
 
+            except asyncio.CancelledError:
+                was_cancelled = True
+                raise
             except Exception as exc:
                 logger.exception("Streaming error for query=%s", query_row.id)
+                stream_error = str(exc)
                 error_payload = json.dumps({
                     "error": {"message": str(exc), "type": "stream_error"},
                 })
                 yield (f"data: {error_payload}\n\n").encode()
                 yield b"data: [DONE]\n\n"
+            finally:
+                try:
+                    if stream_error:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            status_code=502,
+                            error_message=stream_error,
+                            latency_ms=latency_ms,
+                        )
+                    elif was_cancelled:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            status_code=499,
+                            error_message="Streaming cancelled by client",
+                            latency_ms=latency_ms,
+                        )
+                    else:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            provider_response=ProviderResponse(
+                                provider=final_provider_name,
+                                model=final_model_name,
+                                content="".join(chunks),
+                                raw_response={
+                                    "id": f"stream_{query_row.id}",
+                                    "object": "chat.completion",
+                                    "model": final_model_name,
+                                    "choices": [
+                                        {
+                                            "index": 0,
+                                            "message": {"role": "assistant", "content": "".join(chunks)},
+                                            "finish_reason": "stop",
+                                        }
+                                    ],
+                                    "usage": {
+                                        "prompt_tokens": usage_prompt_tokens,
+                                        "completion_tokens": usage_completion_tokens,
+                                        "total_tokens": usage_prompt_tokens + usage_completion_tokens,
+                                    },
+                                },
+                                input_tokens=usage_prompt_tokens,
+                                output_tokens=usage_completion_tokens,
+                                finish_reason="stop",
+                                latency_ms=latency_ms,
+                            ),
+                            status_code=200,
+                        )
+                    await db.commit()
+                except Exception:
+                    logger.exception("Failed to persist streaming response for query=%s", query_row.id)
+                    with contextlib.suppress(Exception):
+                        await db.rollback()
 
         return StreamingResponse(
             _event_stream(),
