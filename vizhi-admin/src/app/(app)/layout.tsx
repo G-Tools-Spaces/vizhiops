@@ -4,9 +4,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Database, LogOut, ShieldCheck } from "lucide-react";
+import {
+  Database,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { clearSession, setCurrentUser } from "@/lib/auth";
+
+const primaryNav = [
+  {
+    href: "/catalog",
+    label: "Catalog",
+    icon: Database,
+    match: (pathname: string) => pathname.startsWith("/catalog"),
+  },
+];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -70,43 +83,71 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  const pageTitle = pathname.startsWith("/catalog") ? "Catalog" : "Admin";
+
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-[var(--line)] bg-[var(--panel)]">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
-          <Link href="/catalog" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--brand)] text-[var(--brand-ink)]">
-              <ShieldCheck className="h-4 w-4" />
-            </span>
-            <span className="font-semibold">Vizhi Admin</span>
-          </Link>
-          <nav className="ml-4 flex items-center gap-1">
-            <Link
-              href="/catalog"
-              className={`flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 text-sm transition ${
-                pathname.startsWith("/catalog")
-                  ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                  : "text-[var(--ink-secondary)] hover:bg-[var(--surface)]"
-              }`}
-            >
-              <Database className="h-4 w-4" />
-              Model Catalog
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-[var(--ink-tertiary)]">{me.data.email}</span>
-            <button
-              onClick={logout}
-              title="Sign out"
-              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--line)] px-3 py-1.5 text-sm text-[var(--ink-secondary)] transition hover:bg-[var(--surface)] hover:text-[var(--ink)]"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
+    <div className="flex min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+      <aside className="flex w-[72px] flex-col items-center border-r border-[var(--line)] bg-[var(--panel)] py-4">
+        <Link
+          href="/catalog"
+          className="mb-5 flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--brand)] text-[var(--brand-ink)] shadow-sm"
+        >
+          <ShieldCheck className="h-4 w-4" />
+        </Link>
+
+        <nav className="flex flex-1 flex-col items-center gap-2">
+          {primaryNav.map((item) => {
+            const Icon = item.icon;
+            const active = item.match(pathname);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                title={item.label}
+                className={`flex h-9 w-9 items-center justify-center rounded-[12px] border transition ${
+                  active
+                    ? "border-[var(--accent-soft)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-transparent text-[var(--ink-tertiary)] hover:border-[var(--line)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+              </Link>
+            );
+          })}
+        </nav>
+
+        <button
+          onClick={logout}
+          title="Sign out"
+          className="mt-4 flex h-9 w-9 items-center justify-center rounded-[12px] border border-transparent text-[var(--ink-tertiary)] transition hover:border-[var(--line)] hover:bg-[var(--surface)] hover:text-[var(--ink)]"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-[var(--line)] bg-[var(--panel)]">
+          <div className="flex h-16 items-center justify-between px-8">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--ink-tertiary)]">
+                <span className="font-medium text-[var(--brand)]">Vizhi Admin</span>
+                <span>/</span>
+                <span>{me.data.email}</span>
+                <span>/</span>
+                <span className="text-[var(--ink)]">{pageTitle}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-xs font-medium text-[var(--ink-secondary)]">
+                {me.data.email.slice(0, 1).toUpperCase()}
+              </div>
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        </header>
+
+        <main className="px-8 py-6">{children}</main>
+      </div>
     </div>
   );
 }

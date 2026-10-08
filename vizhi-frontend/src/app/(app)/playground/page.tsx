@@ -165,6 +165,16 @@ export default function PlaygroundPage() {
 
           try {
             const json = JSON.parse(trimmed.slice(6));
+
+            // Surface provider/gateway errors emitted as SSE (e.g. missing
+            // API key, model not found) instead of silently showing nothing.
+            if (json.error) {
+              const message =
+                json.error.message || json.error.type || "Stream error";
+              setError(message);
+              continue;
+            }
+
             const delta = json.choices?.[0]?.delta;
             const token: string = delta?.content ?? "";
 

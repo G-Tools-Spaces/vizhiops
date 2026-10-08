@@ -49,6 +49,7 @@ _PROVIDER_ENDPOINTS: dict[str, str] = {
     "local":       "",    # resolved from settings.ollama_base_url at runtime
     "ollama":      "",
     "huggingface": "",    # resolved from settings.huggingface_base_url at runtime
+    "nvidia":      "",    # resolved from settings.nvidia_base_url at runtime
     "custom":      "",    # resolved from settings.custom_inference_base_url at runtime
 }
 
@@ -235,6 +236,18 @@ async def _dispatch_call(
             provider_name="huggingface",
         )
 
+    if backend == "nvidia":
+        _check_key("NVIDIA", settings.nvidia_api_key)
+        base = (settings.nvidia_base_url or "https://integrate.api.nvidia.com/v1").rstrip("/").removesuffix("/v1")
+        return await _openai_compat_call(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(settings.nvidia_api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=False),
+            backend_name="nvidia",
+            model=model,
+            provider_name="nvidia",
+        )
+
     if backend in ("local", "ollama", "vllm", "tgi"):
         local_base = (kwargs.get("base_url") or settings.ollama_base_url or "http://localhost:11434").rstrip("/")
         return await _openai_compat_call(
@@ -329,6 +342,19 @@ async def _dispatch_stream(
             payload=_build_payload(hf_model, messages, temperature, max_tokens, stream=True),
             backend_name="huggingface",
             model=hf_model,
+        ):
+            yield chunk
+        return
+
+    if backend == "nvidia":
+        _check_key("NVIDIA", settings.nvidia_api_key)
+        base = (settings.nvidia_base_url or "https://integrate.api.nvidia.com/v1").rstrip("/").removesuffix("/v1")
+        async for chunk in _openai_compat_stream_gen(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(settings.nvidia_api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
+            backend_name="nvidia",
+            model=model,
         ):
             yield chunk
         return
@@ -744,6 +770,7 @@ def _provider_to_backend(provider_name: str) -> str:
         "tgi":         "local",
         "huggingface": "huggingface",
         "hf":          "huggingface",
+        "nvidia":      "nvidia",
     }
     backend = mapping.get(provider_name.lower())
     if backend:
@@ -764,6 +791,8 @@ def _auto_detect_backend() -> str:
         return "qwen"
     if settings.huggingface_api_key or settings.hf_token:
         return "huggingface"
+    if settings.nvidia_api_key:
+        return "nvidia"
     if settings.custom_inference_base_url:
         return "custom"
     return "huggingface"  # last resort

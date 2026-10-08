@@ -22,6 +22,7 @@ from app.providers.local import LocalProvider
 from app.providers.openai import OpenAIProvider
 from app.providers.qwen import QwenProvider
 from app.providers.huggingface import HuggingFaceProvider
+from app.providers.nvidia import NvidiaProvider
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ _PROVIDERS: dict[str, type[BaseProvider]] = {
     "tgi": LocalProvider,
     "huggingface": HuggingFaceProvider,
     "hf": HuggingFaceProvider,
+    "nvidia": NvidiaProvider,
+    "nim": NvidiaProvider,
     # Legacy named open-model providers — all route to HuggingFace
     "llama": HuggingFaceProvider,
     "mistral": HuggingFaceProvider,
@@ -77,6 +80,16 @@ _MODEL_PREFIX_HINTS: dict[str, str] = {
     "phi": "huggingface",
     "deepseek": "huggingface",
     "meta-llama": "huggingface",
+    # NVIDIA NIM namespaced model ids (e.g. meta/llama-3.3-70b-instruct)
+    "meta/": "nvidia",
+    "nvidia/": "nvidia",
+    "deepseek-ai/": "nvidia",
+    "mistralai/": "nvidia",
+    "google/": "nvidia",
+    "microsoft/": "nvidia",
+    "qwen/": "nvidia",
+    "ibm/": "nvidia",
+    "bytedance/": "nvidia",
 }
 
 # ── Fallback chain: if primary provider fails, try these in order ───────

@@ -136,4 +136,18 @@ export const api = {
     request<void>(`/v1/admin/catalog/models/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+
+  // NVIDIA NIM — fetch live models from build.nvidia.com into the catalog
+  syncNvidia: () =>
+    request<{ source: string; created: number; total: number }>(
+      "/v1/admin/catalog/sync-nvidia",
+      { method: "POST" }
+    ),
+
+  // HuggingFace — fetch live models from the HF router into the catalog
+  syncHuggingface: () =>
+    request<{ source: string; created: number; total: number }>(
+      "/v1/admin/catalog/sync-huggingface",
+      { method: "POST" }
+    ),
 };

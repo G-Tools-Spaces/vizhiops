@@ -87,6 +87,14 @@ _PROVIDERS_TO_CHECK: list[dict] = [
         "requires_key": "qwen_api_key",
     },
     {
+        "name": "nvidia",
+        "label": "NVIDIA NIM",
+        "probe_url": f"{settings.nvidia_base_url.rstrip('/').removesuffix('/v1')}/v1/models",
+        "method": "GET",
+        "headers_fn": lambda: {"Authorization": f"Bearer {settings.nvidia_api_key}"},
+        "requires_key": "nvidia_api_key",
+    },
+    {
         "name": "local",
         "label": "Local / Ollama",
         "probe_url": f"{settings.ollama_base_url.rstrip('/')}/api/tags",
