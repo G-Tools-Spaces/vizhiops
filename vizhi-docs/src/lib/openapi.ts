@@ -57,7 +57,7 @@ export interface OpenApiIndex {
 export const openApiIndex = data as OpenApiIndex;
 
 /** Human-readable titles for each tag, in sidebar order. */
-export const TAG_META: Record<string, { title: string; href: string }> = {
+export const TAG_META: Record<string, { title: string; href?: string }> = {
   auth: { title: "Authentication", href: "/docs/authentication" },
   chat: { title: "Chat completions", href: "/docs/chat" },
   models: { title: "Model tokens", href: "/docs/models" },
@@ -67,6 +67,8 @@ export const TAG_META: Record<string, { title: string; href: string }> = {
   metrics: { title: "Metrics", href: "/docs/metrics" },
   dashboard: { title: "Dashboard", href: "/docs/dashboard" },
   health: { title: "Provider health", href: "/docs/health" },
+  // Admin-only endpoints (consumed by the Vizhi admin console, not the public API).
+  "admin-catalog": { title: "Admin catalog" },
 };
 
 export function tagTitle(tag: string): string {

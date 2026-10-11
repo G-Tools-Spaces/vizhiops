@@ -194,6 +194,7 @@ export default function ModelTokensPage() {
                 size="icon"
                 title="Configure spending / token budget"
                 disabled={isPending}
+                variant={budgetId === model.id ? "primary" : "secondary"}
                 onClick={() => setBudgetId(budgetId === model.id ? null : model.id)}
               >
                 <Wallet className="h-4 w-4" />

@@ -206,6 +206,27 @@ console.log(resp.choices[0].message.content);`,
           the stream ends with <C>data: [DONE]</C>. The query id is returned in
           the <C>X-Vizhi-Query-Id</C> response header.
         </P>
+        <P>
+          Just before <C>[DONE]</C>, the gateway emits one final event carrying
+          the full <C>vizhi_metadata</C> object — the same block the
+          non-streaming response returns — so streaming clients can read the
+          provider, latency, query id, and fallback journey without a second
+          request:
+        </P>
+        <ResponseBlock
+          json={`data: {"vizhi_metadata": {
+  "agent_id": "mt_1a2b3c4d",
+  "provider": "huggingface",
+  "model": "zai-org/GLM-5.3-Flash",
+  "latency_ms": 610,
+  "query_id": "q_f83262767bf3",
+  "used_fallback": false,
+  "fallback_attempts": [],
+  "original_provider": null
+}}
+
+data: [DONE]`}
+        />
         <CodeTabs
           sample={{
             python: `with client.stream(

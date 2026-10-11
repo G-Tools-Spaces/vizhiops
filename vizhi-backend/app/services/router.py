@@ -440,6 +440,7 @@ class ProviderRouter:
         max_tokens: int | None = None,
         max_retries_per_provider: int = 2,
         base_backoff_seconds: float = 1.0,
+        meta_out: dict | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat completion with automatic provider fallback.
 
@@ -449,6 +450,10 @@ class ProviderRouter:
 
         Yields OpenAI-compatible ``data: {...}`` SSE lines.
         Terminates with ``data: [DONE]``.
+
+        If ``meta_out`` is provided (a dict), it is filled with the fallback
+        journey once a provider commits: ``final_provider``, ``final_model``,
+        ``used_fallback``, ``original_provider``, ``fallback_attempts``.
 
         Raises:
             RuntimeError: If all providers (and their retries) are exhausted
@@ -488,6 +493,15 @@ class ProviderRouter:
                         "Stream committed: provider=%s model=%s fallback=%s",
                         provider_name, resolved_model, not is_primary,
                     )
+
+                    if meta_out is not None:
+                        meta_out["final_provider"] = provider_name
+                        meta_out["final_model"] = resolved_model
+                        meta_out["used_fallback"] = not is_primary
+                        meta_out["original_provider"] = (
+                            candidates[0][2] if not is_primary else None
+                        )
+                        meta_out["fallback_attempts"] = list(all_errors)
 
                     # Yield first chunk then exhaust the rest
                     yield first_chunk

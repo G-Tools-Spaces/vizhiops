@@ -236,8 +236,18 @@ async def get_model_usage(
     # Get aggregate statistics
     from sqlalchemy import case as sql_case, or_
     
-    # Handle both "gpt-4o" and "openai/gpt-4o" formats
-    model_name_short = model_row.model_name.split('/')[-1]  # Extract "gpt-4o" from "openai/gpt-4o"
+    # Queries store the provider-stripped model name (the router removes the
+    # leading "provider/" prefix before persisting), e.g. a connection for
+    # "huggingface/zai-org/GLM-5.3-Flash" logs queries with model
+    # "zai-org/GLM-5.3-Flash". Match every variant so history is never lost:
+    #   full name      "huggingface/zai-org/GLM-5.3-Flash"
+    #   stripped name "zai-org/GLM-5.3-Flash"
+    #   last segment   "GLM-5.3-Flash"
+    model_name_variants = {
+        model_row.model_name,
+        model_row.model_name.split('/', 1)[-1],
+        model_row.model_name.split('/')[-1],
+    }
     
     stats_result = await db.execute(
         select(
@@ -251,10 +261,7 @@ async def get_model_usage(
         .select_from(QueryRow)
         .join(ResponseRow, ResponseRow.query_id == QueryRow.id)
         .where(
-            or_(
-                QueryRow.model == model_row.model_name,  # Match full name "openai/gpt-4o"
-                QueryRow.model == model_name_short,      # Match short name "gpt-4o"
-            ),
+            or_(*[QueryRow.model == v for v in model_name_variants]),
             QueryRow.user_id == user.id,
         )
     )
@@ -283,10 +290,7 @@ async def get_model_usage(
     queries_result = await db.execute(
         select(QueryRow)
         .where(
-            or_(
-                QueryRow.model == model_row.model_name,  # Match full name
-                QueryRow.model == model_name_short,      # Match short name
-            ),
+            or_(*[QueryRow.model == v for v in model_name_variants]),
             QueryRow.user_id == user.id,
         )
         .order_by(QueryRow.timestamp.desc())

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Columns3, Download, Search } from "lucide-react";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { cn } from "@/lib/utils";
@@ -206,15 +206,31 @@ export function DataTable({
                 </td>
               </tr>
             ) : (
-              filteredRows.map((row, index) => (
-                <tr key={index} className="transition-colors hover:bg-[var(--surface)]">
-                  {visibleIndexes.map((cellIndex) => (
-                    <td key={cellIndex} className="px-4 py-3 align-middle text-[var(--ink-secondary)]">
-                      {row[cellIndex]}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              filteredRows.map((row, index) => {
+                // Cells beyond the header count are "extra" content (e.g. an
+                // inline BudgetPanel) rendered as a full-width row beneath.
+                const extras = row.slice(headers.length);
+                return (
+                  <Fragment key={index}>
+                    <tr className="transition-colors hover:bg-[var(--surface)]">
+                      {visibleIndexes.map((cellIndex) => (
+                        <td key={cellIndex} className="px-4 py-3 align-middle text-[var(--ink-secondary)]">
+                          {row[cellIndex]}
+                        </td>
+                      ))}
+                    </tr>
+                    {extras.map((node, extraIndex) =>
+                      node ? (
+                        <tr key={`extra-${extraIndex}`} className="bg-[var(--surface)]">
+                          <td colSpan={visibleIndexes.length} className="p-0">
+                            {node}
+                          </td>
+                        </tr>
+                      ) : null,
+                    )}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

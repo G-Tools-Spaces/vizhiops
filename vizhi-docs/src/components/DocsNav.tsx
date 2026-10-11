@@ -18,6 +18,7 @@ const SECTIONS: { title: string; items: { href: string; label: string }[] }[] = 
       { href: "/docs", label: "Overview" },
       { href: "/docs/quickstart", label: "Quickstart" },
       { href: "/docs/authentication", label: "Authentication" },
+      { href: "/docs/sdk", label: "Python SDK" },
     ],
   },
   {

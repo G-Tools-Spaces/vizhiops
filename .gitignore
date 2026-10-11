@@ -1,0 +1,29 @@
+# Nested independent repositories (kept out of the VizhiOps repo)
+vizhi-sdk/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Environment / secrets
+.env
+.env.local
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local databases
+*.db
+*.sqlite3

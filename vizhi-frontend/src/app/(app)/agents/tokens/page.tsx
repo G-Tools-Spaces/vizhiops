@@ -172,6 +172,7 @@ export default function AgentTokensPage() {
                 size="icon"
                 title="Configure spending / token budget"
                 disabled={isPending}
+                variant={budgetCID === agent.cid ? "primary" : "secondary"}
                 onClick={() => setBudgetCID(budgetCID === agent.cid ? null : agent.cid)}
               >
                 <Wallet className="h-4 w-4" />

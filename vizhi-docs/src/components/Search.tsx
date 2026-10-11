@@ -36,6 +36,7 @@ const PAGES: PageEntry[] = [
   { kind: "page", label: "Overview", href: "/docs", section: "Getting started", keywords: ["home", "intro"] },
   { kind: "page", label: "Quickstart", href: "/docs/quickstart", section: "Getting started", keywords: ["start", "first call", "setup"] },
   { kind: "page", label: "Authentication", href: "/docs/authentication", section: "Getting started", keywords: ["auth", "api key", "token", "login"] },
+  { kind: "page", label: "Python SDK", href: "/docs/sdk", section: "Getting started", keywords: ["sdk", "python", "pip", "client", "library", "install"] },
   { kind: "page", label: "Chat completions", href: "/docs/chat", section: "Core resources", keywords: ["chat", "completion", "llm", "message"] },
   { kind: "page", label: "Model tokens", href: "/docs/models", section: "Core resources", keywords: ["model", "token", "provider", "connect"] },
   { kind: "page", label: "Agents", href: "/docs/agents", section: "Core resources", keywords: ["agent", "identity", "budget"] },

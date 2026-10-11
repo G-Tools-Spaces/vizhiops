@@ -62,3 +62,40 @@ Useful commands: `alembic current` (applied revision), `alembic history`
 
 > Databases created before Alembic are adopted automatically: on first startup
 > they are stamped at head, then migrated normally.
+
+## Smoke testing
+
+`smoke_test.py` is a standalone black-box script that verifies every public
+endpoint of a **running** Vizhi server end-to-end: signup → model token
+lifecycle → chat gateway → agent lifecycle → agent queue → observability →
+cleanup. Use it before integrating Vizhi into another product, or after any
+deployment, to confirm the API contract still holds.
+
+```bash
+# 1. Start the server (if not already running)
+cd vizhi-backend
+./venv/bin/uvicorn app.main:app --port 8000
+
+# 2. Safe run — no LLM calls, zero cost
+./venv/bin/python smoke_test.py --skip-chat
+
+# 3. Full run — includes real chat completions (tiny cost)
+./venv/bin/python smoke_test.py
+
+# 4. Machine-readable report for CI
+./venv/bin/python smoke_test.py --skip-chat --json report.json
+```
+
+Flags:
+
+| Flag | Purpose |
+|---|---|
+| `--base-url <url>` | Target server (default `http://localhost:8000`) |
+| `--skip-chat` | Skip real LLM calls — zero cost |
+| `--dry-run` | Read-only endpoints only (health, registry, auth-negatives) |
+| `--json <file>` | Also write results as JSON |
+| `--timeout <sec>` | Per-request timeout (default 15s) |
+
+Safety: the script only touches resources it creates itself (unique test email
+per run, tokens/agents deleted at the end), never prints full API keys, and
+exits with code 0 (all passed) / 1 (any failure) so it can gate CI pipelines.

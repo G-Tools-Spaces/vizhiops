@@ -109,7 +109,7 @@ export default function ReferencePage() {
         const meta = TAG_META[group.tag];
         return (
           <Section key={group.tag} id={group.tag} title={tagTitle(group.tag)}>
-            {meta && (
+            {meta?.href && (
               <P>
                 See the{" "}
                 <Link href={meta.href} className="text-accent hover:underline">

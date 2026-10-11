@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-25T08:26:19.144Z",
+  "generatedAt": "2026-10-11T12:35:30.284Z",
   "title": "Vizhi API Gateway",
   "version": "1.0.0",
   "groups": [
@@ -129,6 +129,302 @@
           "responses": [
             {
               "status": "204",
+              "description": "Successful Response"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "admin-catalog",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/v1/admin/catalog/providers",
+          "summary": "List Providers",
+          "description": "List ALL providers (including disabled) with their models.",
+          "operationId": "list_providers_v1_admin_catalog_providers_get",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/admin/catalog/providers",
+          "summary": "Create Provider",
+          "description": "",
+          "operationId": "create_provider_v1_admin_catalog_providers_post",
+          "parameters": [],
+          "requestBody": [
+            {
+              "name": "id",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "sort_order",
+              "type": "integer",
+              "required": false,
+              "description": "",
+              "default": 0
+            },
+            {
+              "name": "enabled",
+              "type": "boolean",
+              "required": false,
+              "description": "",
+              "default": true
+            }
+          ],
+          "responses": [
+            {
+              "status": "201",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/admin/catalog/providers/{provider_id}",
+          "summary": "Update Provider",
+          "description": "",
+          "operationId": "update_provider_v1_admin_catalog_providers__provider_id__patch",
+          "parameters": [
+            {
+              "name": "provider_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "label",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "sort_order",
+              "type": "integer | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "enabled",
+              "type": "boolean | null",
+              "required": false,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/admin/catalog/providers/{provider_id}",
+          "summary": "Delete Provider",
+          "description": "",
+          "operationId": "delete_provider_v1_admin_catalog_providers__provider_id__delete",
+          "parameters": [
+            {
+              "name": "provider_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "204",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/admin/catalog/providers/{provider_id}/models",
+          "summary": "Create Model",
+          "description": "",
+          "operationId": "create_model_v1_admin_catalog_providers__provider_id__models_post",
+          "parameters": [
+            {
+              "name": "provider_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "id",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "label",
+              "type": "string",
+              "required": true,
+              "description": ""
+            },
+            {
+              "name": "sort_order",
+              "type": "integer",
+              "required": false,
+              "description": "",
+              "default": 0
+            },
+            {
+              "name": "enabled",
+              "type": "boolean",
+              "required": false,
+              "description": "",
+              "default": true
+            }
+          ],
+          "responses": [
+            {
+              "status": "201",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/admin/catalog/models/{model_id}",
+          "summary": "Update Model",
+          "description": "",
+          "operationId": "update_model_v1_admin_catalog_models__model_id__patch",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [
+            {
+              "name": "label",
+              "type": "string | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "sort_order",
+              "type": "integer | null",
+              "required": false,
+              "description": ""
+            },
+            {
+              "name": "enabled",
+              "type": "boolean | null",
+              "required": false,
+              "description": ""
+            }
+          ],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/admin/catalog/models/{model_id}",
+          "summary": "Delete Model",
+          "description": "",
+          "operationId": "delete_model_v1_admin_catalog_models__model_id__delete",
+          "parameters": [
+            {
+              "name": "model_id",
+              "in": "path",
+              "required": true,
+              "type": "string",
+              "description": ""
+            }
+          ],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "204",
+              "description": "Successful Response"
+            },
+            {
+              "status": "422",
+              "description": "Validation Error"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/admin/catalog/sync-nvidia",
+          "summary": "Sync Nvidia Models",
+          "description": "Fetch NVIDIA NIM models and upsert them into the catalog.",
+          "operationId": "sync_nvidia_models_v1_admin_catalog_sync_nvidia_post",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
+              "description": "Successful Response"
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/admin/catalog/sync-huggingface",
+          "summary": "Sync Huggingface Models",
+          "description": "Fetch live HuggingFace models and upsert them into the catalog.",
+          "operationId": "sync_huggingface_models_v1_admin_catalog_sync_huggingface_post",
+          "parameters": [],
+          "requestBody": [],
+          "responses": [
+            {
+              "status": "200",
               "description": "Successful Response"
             }
           ]
@@ -916,7 +1212,7 @@
           "method": "GET",
           "path": "/v1/models/registry",
           "summary": "Model Registry",
-          "description": "Return provider/model options for client dropdowns.",
+          "description": "Return provider/model options for client dropdowns (from the DB catalog).",
           "operationId": "model_registry_v1_models_registry_get",
           "parameters": [],
           "requestBody": [],

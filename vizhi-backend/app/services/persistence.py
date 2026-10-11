@@ -71,6 +71,7 @@ async def persist_response(
     status_code: int = 200,
     error_message: str | None = None,
     latency_ms: int = 0,
+    model_connection_id: str | None = None,
 ) -> ResponseRow:
     """Save the provider response (or error) after the call."""
     row = ResponseRow(
@@ -90,12 +91,23 @@ async def persist_response(
 
     # Increment model connection usage count and update stats.
     if provider_response and status_code < 400:
-        result = await db.execute(
-            select(ModelConnectionRow).where(
-                ModelConnectionRow.model_name == provider_response.model,
-                ModelConnectionRow.status == "active",
+        if model_connection_id:
+            # Exact match — the caller knows which connection made the call.
+            # (Name matching is unreliable: providers return their own model
+            # ids, e.g. "gpt-4o-mini-2024-07-18" vs catalog
+            # "openai/gpt-4o-mini", so usage_count never incremented.)
+            result = await db.execute(
+                select(ModelConnectionRow).where(
+                    ModelConnectionRow.id == model_connection_id
+                )
             )
-        )
+        else:
+            result = await db.execute(
+                select(ModelConnectionRow).where(
+                    ModelConnectionRow.model_name == provider_response.model,
+                    ModelConnectionRow.status == "active",
+                )
+            )
         mc = result.scalars().first()
         if mc:
             mc.usage_count += 1
@@ -228,16 +240,28 @@ async def complete_agent_job(
     job.completed_at = _utcnow()
     job.updated_at = _utcnow()
 
+    usage = usage or {}
+    input_tokens = int(usage.get("prompt_tokens", 0) or 0)
+    output_tokens = int(usage.get("completion_tokens", 0) or 0)
+    # Prefer an explicit cost reported by the agent; otherwise estimate from
+    # token usage so agent budget enforcement accumulates spend.
+    try:
+        estimated_cost = float(usage.get("estimated_cost", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        estimated_cost = 0.0
+    if estimated_cost == 0.0 and (input_tokens or output_tokens):
+        estimated_cost = _estimate_cost_from_tokens(job.provider, input_tokens, output_tokens)
+
     response_row = ResponseRow(
         id=f"r_{_id()}",
         query_id=job.query_id,
         response=json.dumps(output),
-        latency_ms=int((usage or {}).get("latency_ms", 0)),
-        input_tokens=int((usage or {}).get("prompt_tokens", 0)),
-        output_tokens=int((usage or {}).get("completion_tokens", 0)),
+        latency_ms=int(usage.get("latency_ms", 0) or 0),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         status_code=200 if status == "completed" else 500,
         error_message=error or None,
-        estimated_cost=0.0,
+        estimated_cost=estimated_cost,
         timestamp=_utcnow(),
     )
     db.add(response_row)
@@ -493,19 +517,28 @@ async def _build_timeseries(
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 
-def _estimate_cost(resp: ProviderResponse) -> float:
-    """Rough cost estimation per 1K tokens.  Very approximate for P0."""
-    # Simplified pricing (USD per 1K tokens)
-    _pricing: dict[str, tuple[float, float]] = {
-        "openai": (0.005, 0.015),
-        "anthropic": (0.003, 0.015),
-        "gemini": (0.001, 0.002),
-        "qwen": (0.002, 0.006),
-        "local": (0.0, 0.0),
-    }
-    input_rate, output_rate = _pricing.get(resp.provider, (0.005, 0.015))
+# Rough USD pricing per 1K tokens (input, output). Very approximate for P0.
+_PRICING_PER_1K: dict[str, tuple[float, float]] = {
+    "openai": (0.005, 0.015),
+    "anthropic": (0.003, 0.015),
+    "gemini": (0.001, 0.002),
+    "qwen": (0.002, 0.006),
+    "nvidia": (0.0006, 0.0018),
+    "huggingface": (0.0, 0.0),  # open models via the HF router
+    "local": (0.0, 0.0),
+}
+
+
+def _estimate_cost_from_tokens(provider: str, input_tokens: int, output_tokens: int) -> float:
+    """Estimate USD cost from token counts for the given provider."""
+    input_rate, output_rate = _PRICING_PER_1K.get(provider, (0.005, 0.015))
     return round(
-        (resp.input_tokens / 1000) * input_rate
-        + (resp.output_tokens / 1000) * output_rate,
+        (input_tokens / 1000) * input_rate
+        + (output_tokens / 1000) * output_rate,
         4,
     )
+
+
+def _estimate_cost(resp: ProviderResponse) -> float:
+    """Rough cost estimation per 1K tokens.  Very approximate for P0."""
+    return _estimate_cost_from_tokens(resp.provider, resp.input_tokens, resp.output_tokens)

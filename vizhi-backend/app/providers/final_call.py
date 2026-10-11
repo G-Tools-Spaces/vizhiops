@@ -412,6 +412,11 @@ def _build_payload(
     }
     if max_tokens is not None:
         p["max_tokens"] = max_tokens
+    if stream:
+        # Ask OpenAI-compatible providers to include token usage in the final
+        # stream chunk. Without this, streaming responses log 0 tokens / $0
+        # cost and budget enforcement never accumulates spend.
+        p["stream_options"] = {"include_usage": True}
     return p
 
 
@@ -684,6 +689,8 @@ async def _anthropic_stream_gen(
 
             response_model = model
             chunk_index = 0
+            usage_input_tokens = 0
+            usage_output_tokens = 0
 
             async for raw_line in resp.aiter_lines():
                 line = raw_line.strip()
@@ -702,10 +709,12 @@ async def _anthropic_stream_gen(
 
                 event_type = event.get("type", "")
 
-                # message_start carries model info
+                # message_start carries model info + input token usage
                 if event_type == "message_start":
                     msg = event.get("message", {})
                     response_model = msg.get("model", model)
+                    msg_usage = msg.get("usage") or {}
+                    usage_input_tokens = int(msg_usage.get("input_tokens", 0) or 0)
 
                 # content_block_delta carries the actual token
                 elif event_type == "content_block_delta":
@@ -727,10 +736,14 @@ async def _anthropic_stream_gen(
                         yield f"data: {_json.dumps(openai_chunk)}"
                         chunk_index += 1
 
-                # message_delta carries finish_reason
+                # message_delta carries finish_reason + output token usage
                 elif event_type == "message_delta":
                     delta = event.get("delta", {})
                     stop_reason = delta.get("stop_reason")
+                    event_usage = event.get("usage") or {}
+                    usage_output_tokens = int(
+                        event_usage.get("output_tokens", 0) or usage_output_tokens
+                    )
                     if stop_reason:
                         finish_chunk = {
                             "id": f"anth_{chunk_index}",
@@ -743,6 +756,13 @@ async def _anthropic_stream_gen(
                                     "finish_reason": stop_reason,
                                 }
                             ],
+                            # Emit usage so the gateway can track spend for
+                            # budget enforcement on streamed Anthropic calls.
+                            "usage": {
+                                "prompt_tokens": usage_input_tokens,
+                                "completion_tokens": usage_output_tokens,
+                                "total_tokens": usage_input_tokens + usage_output_tokens,
+                            },
                         }
                         yield f"data: {_json.dumps(finish_chunk)}"
                         chunk_index += 1

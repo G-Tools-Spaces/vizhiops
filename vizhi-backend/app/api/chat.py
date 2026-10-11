@@ -208,6 +208,24 @@ async def chat_completions(
             usage_completion_tokens = 0
             latency_ms = 0
             finish_reason = "stop"
+            stream_meta: dict = {}
+            stream_start_ns = time.perf_counter_ns()
+            metadata_sent = False
+
+            def _metadata_event_bytes() -> bytes:
+                """SSE event carrying vizhi_metadata so streaming SDK clients
+                can read provider / latency / query_id / fallback info."""
+                vm = {
+                    "agent_id": credential.principal_id,
+                    "provider": stream_meta.get("final_provider") or final_provider_name,
+                    "model": final_model_name,
+                    "latency_ms": int((time.perf_counter_ns() - stream_start_ns) // 1_000_000),
+                    "query_id": query_row.id,
+                    "used_fallback": bool(stream_meta.get("used_fallback", False)),
+                    "fallback_attempts": list(stream_meta.get("fallback_attempts", [])),
+                    "original_provider": stream_meta.get("original_provider"),
+                }
+                return (f"data: {json.dumps({'vizhi_metadata': vm})}\n\n").encode()
 
             try:
                 if settings.fallback_enabled:
@@ -219,8 +237,16 @@ async def chat_completions(
                         max_tokens=body.max_tokens,
                         max_retries_per_provider=settings.fallback_max_retries_per_provider,
                         base_backoff_seconds=settings.fallback_base_backoff_seconds,
+                        meta_out=stream_meta,
                     )
                 else:
+                    stream_meta = {
+                        "final_provider": provider_name,
+                        "final_model": resolved_model,
+                        "used_fallback": False,
+                        "original_provider": None,
+                        "fallback_attempts": [],
+                    }
                     gen = _primary_provider.chat_completion_stream(
                         model=resolved_model,
                         messages=messages_raw,
@@ -248,7 +274,17 @@ async def chat_completions(
                         usage = event.get("usage") or {}
                         usage_prompt_tokens = int(usage.get("prompt_tokens") or usage_prompt_tokens or 0)
                         usage_completion_tokens = int(usage.get("completion_tokens") or usage_completion_tokens or 0)
+                    # Inject the vizhi_metadata event just before the stream
+                    # terminator so SDK clients receive full metadata.
+                    if not metadata_sent and line.strip() == "data: [DONE]":
+                        metadata_sent = True
+                        yield _metadata_event_bytes()
                     yield (line + "\n\n").encode()
+
+                # Provider stream ended without [DONE] — still emit metadata.
+                if not metadata_sent:
+                    metadata_sent = True
+                    yield _metadata_event_bytes()
 
             except asyncio.CancelledError:
                 was_cancelled = True
@@ -262,6 +298,9 @@ async def chat_completions(
                 yield (f"data: {error_payload}\n\n").encode()
                 yield b"data: [DONE]\n\n"
             finally:
+                final_latency_ms = latency_ms or int(
+                    (time.perf_counter_ns() - stream_start_ns) // 1_000_000
+                )
                 try:
                     if stream_error:
                         await persist_response(
@@ -269,7 +308,7 @@ async def chat_completions(
                             query_id=query_row.id,
                             status_code=502,
                             error_message=stream_error,
-                            latency_ms=latency_ms,
+                            latency_ms=final_latency_ms,
                         )
                     elif was_cancelled:
                         await persist_response(
@@ -277,7 +316,7 @@ async def chat_completions(
                             query_id=query_row.id,
                             status_code=499,
                             error_message="Streaming cancelled by client",
-                            latency_ms=latency_ms,
+                            latency_ms=final_latency_ms,
                         )
                     else:
                         await persist_response(
@@ -307,9 +346,14 @@ async def chat_completions(
                                 input_tokens=usage_prompt_tokens,
                                 output_tokens=usage_completion_tokens,
                                 finish_reason=finish_reason,
-                                latency_ms=latency_ms,
+                                latency_ms=final_latency_ms,
                             ),
                             status_code=200,
+                            model_connection_id=(
+                                credential.principal_id
+                                if credential.token_type == "model"
+                                else None
+                            ),
                         )
                     await db.commit()
                 except Exception:
@@ -373,7 +417,7 @@ async def chat_completions(
                 temperature=body.temperature,
                 max_tokens=body.max_tokens,
             )
-            from app.services.router import FallbackResult as _FR, ProviderResponse  # noqa
+            from app.services.router import FallbackResult as _FR  # noqa
             fallback_result = _FR(
                 response=result_direct,
                 final_provider=provider_name,
@@ -410,6 +454,11 @@ async def chat_completions(
         query_id=query_row.id,
         provider_response=result,
         status_code=200,
+        model_connection_id=(
+            credential.principal_id
+            if credential.token_type == "model"
+            else None
+        ),
     )
 
     return ChatCompletionResponse(
