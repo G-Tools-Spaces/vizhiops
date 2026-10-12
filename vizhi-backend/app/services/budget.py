@@ -113,15 +113,20 @@ async def _spent_for_model(
 
 # ── Public API ───────────────────────────────────────────────────────────
 
-async def check_agent_budget(db: AsyncSession, agent_id: str) -> None:
+async def check_agent_budget(
+    db: AsyncSession, agent_id: str, agent_row: AgentRow | None = None
+) -> None:
     """Raise HTTP 429 if the agent has exceeded its configured budget.
 
-    This is a pure pre-flight check — no writes are performed.
+    This is a pure pre-flight check — no writes are performed. Pass
+    `agent_row` when auth already loaded it to skip the lookup.
     """
-    result = await db.execute(
-        select(AgentRow).where(AgentRow.agent_id == agent_id)
-    )
-    agent = result.scalars().first()
+    agent = agent_row
+    if agent is None:
+        result = await db.execute(
+            select(AgentRow).where(AgentRow.agent_id == agent_id)
+        )
+        agent = result.scalars().first()
     if agent is None:
         return  # agent not found — let auth layer handle it
 

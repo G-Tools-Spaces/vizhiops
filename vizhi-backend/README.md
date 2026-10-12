@@ -1,6 +1,28 @@
 # vizhi-backend
 backend-vizhi
 
+## Database
+
+One PostgreSQL database (Neon), for development and production alike; there
+is no local SQLite. Set `DATABASE_URL` to the Neon connection string exactly
+as the console shows it (`postgresql://...?sslmode=require&channel_binding=require`
+is fine; it is translated for asyncpg).
+
+The schema is managed by Alembic. The server never creates tables, so run the
+migrations before starting it, locally and as the Render pre-deploy/build
+step:
+
+```bash
+alembic upgrade head
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
+
+`migrations/versions/0001_baseline_schema.py` converges an existing database
+(adds any missing columns and constraints) as well as creating a fresh one,
+so it is safe on the database that create_all() used to manage. Tests run
+against a throwaway PostgreSQL via `TEST_DATABASE_URL` and are skipped
+without it.
+
 ## Inference routing
 
 All logical providers call `app/providers/final_call.py`. Configure the real

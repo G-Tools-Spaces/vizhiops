@@ -1,37 +1,55 @@
-"""Async SQLAlchemy session factory — one database for every read and write.
+"""Async SQLAlchemy session factory — one PostgreSQL database (Neon).
 
-``DATABASE_URL`` is the single source of truth:
+``DATABASE_URL`` is the single source of truth. A Neon connection string can
+be pasted as-is: the driver prefix is forced to ``postgresql+asyncpg`` and the
+libpq-only query parameters (``sslmode``, ``channel_binding``) are translated
+into asyncpg's ``ssl`` connect argument, which asyncpg would otherwise reject
+as unknown keywords.
 
-* local development → ``sqlite+aiosqlite:///./vizhi.db``
-* production        → ``postgresql+asyncpg://...`` (Supabase)
-
-There is no local/remote split, no background sync and no hydration: the API
-reads and writes the same database it is pointed at.
+The schema is managed by Alembic (``alembic upgrade head``); the application
+never creates tables itself.
 """
 
 from __future__ import annotations
 
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config.settings import settings
 
-_is_sqlite = settings.database_url.startswith("sqlite")
+_LIBPQ_ONLY_PARAMS = ("sslmode", "channel_binding")
 
 
-def _engine_kwargs() -> dict:
-    """Driver-specific engine options for SQLite vs PostgreSQL."""
-    if _is_sqlite:
-        # SQLite requires `check_same_thread=False` for async usage.
-        return {"connect_args": {"check_same_thread": False}}
+def normalized_url(raw: str | None = None) -> tuple[URL, dict]:
+    """The asyncpg URL and connect_args for ``raw`` (default: settings)."""
+    url = make_url(raw or settings.database_url)
+    # Neon's console offers both `postgresql://` and `postgres://` forms.
+    if url.drivername.split("+", 1)[0] not in ("postgresql", "postgres"):
+        raise RuntimeError(
+            "DATABASE_URL must be a PostgreSQL URL (postgresql+asyncpg://...); "
+            f"got driver '{url.drivername}'"
+        )
+    url = url.set(drivername="postgresql+asyncpg")
+
+    query = dict(url.query)
+    sslmode = query.pop("sslmode", None)
+    query.pop("channel_binding", None)
+    url = url.set(query=query)
 
     connect_args: dict = {}
-    # The Supabase connection pooler requires SSL — without this the TLS
-    # handshake times out silently on asyncpg.
-    if "pooler.supabase.com" in settings.database_url:
-        connect_args["ssl"] = "require"
+    if "ssl" not in query:
+        if sslmode and sslmode != "disable":
+            connect_args["ssl"] = "require"
+        elif sslmode is None and url.host not in (None, "localhost", "127.0.0.1"):
+            # A hosted database without an explicit mode: Neon and Supabase
+            # both require TLS and time out silently without it.
+            connect_args["ssl"] = "require"
+    return url, connect_args
 
+
+def engine_options() -> dict:
+    """Pool settings shared by the app engine and Alembic."""
     return {
-        "connect_args": connect_args,
         "pool_size": settings.db_pool_size,
         "max_overflow": settings.db_max_overflow,
         "pool_recycle": settings.db_pool_recycle,
@@ -39,7 +57,9 @@ def _engine_kwargs() -> dict:
     }
 
 
-engine = create_async_engine(settings.database_url, echo=False, **_engine_kwargs())
+_url, _connect_args = normalized_url()
+
+engine = create_async_engine(_url, echo=False, connect_args=_connect_args, **engine_options())
 
 async_session_factory = async_sessionmaker(
     engine,
