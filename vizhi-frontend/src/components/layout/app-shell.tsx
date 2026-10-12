@@ -3,41 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  Activity,
-  Bot,
-  GitBranch,
-  Heart,
-  Home,
-  KeyRound,
-  LogOut,
-  MessageSquare,
-  PlusCircle,
-  Radar,
-  Search,
-  Shield,
-} from "lucide-react";
+import { ChevronLeft, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { CommandPalette } from "@/components/command-palette";
+import { navSections } from "@/components/layout/nav";
 import { api } from "@/lib/api/client";
-import { clearSession, getStoredUser, isAuthenticated, setCurrentUser, type AuthUser } from "@/lib/auth";
+import { clearSession, getStoredUser, setCurrentUser, type AuthUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/models/connect", label: "Connect Model", icon: PlusCircle },
-  { href: "/models/tokens", label: "Model Tokens", icon: KeyRound },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/agents/tokens", label: "Agent Tokens", icon: Shield },
-  { href: "/links", label: "Links", icon: GitBranch },
-  { href: "/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/playground", label: "Playground", icon: MessageSquare },
-  { href: "/health", label: "Provider Health", icon: Heart },
-];
+// Flat lookup for the breadcrumb's current-page label.
+const pageLabels = new Map<string, string>(
+  navSections.flatMap((s) => s.items.map((i) => [i.href, i.label] as const)),
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -54,6 +38,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     loadUser();
   }, [router, user]);
 
+  // ⌘K / Ctrl+K opens the command palette — matches the topbar's Search chip.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   async function logout() {
     try {
       await api.logout();
@@ -65,63 +61,152 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  return (
-    <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-white/10 bg-[#090c11]/95 px-3 py-4 lg:block">
-        <Link href="/dashboard" className="flex h-12 items-center gap-3 px-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--accent)] text-black">
-            <Radar className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-base font-semibold">Vizhi</span>
-            <span className="block text-xs text-[var(--muted)]">Agent observability</span>
-          </span>
-        </Link>
-        <nav className="mt-6 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
+  const currentLabel = pageLabels.get(pathname) ?? "Dashboard";
+  const initials = (user?.name || user?.email || "V")
+    .split(/[\s@.]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex h-10 items-center gap-3 rounded-md px-3 text-sm text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-white",
-                  active && "bg-white/[0.08] text-white",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+  return (
+    <div className="flex min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+      {/* ── Sidebar (232px, mockup: #0C0C0E) ─────────────────────────── */}
+      <aside className="hidden w-[232px] shrink-0 flex-col bg-[var(--surface)] lg:flex">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 border-b border-[var(--line)] px-4 py-3 text-xs font-semibold text-[var(--ink-secondary)] transition-colors hover:text-[var(--ink)]"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Dashboard
+        </Link>
+
+        <div className="flex items-center gap-2.5 px-4 py-4">
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center bg-[var(--brand)] text-[13px] font-bold text-[var(--brand-ink)]">
+            V
+          </span>
+          <span className="flex min-w-0 flex-col gap-[3px]">
+            <span className="truncate text-sm font-bold tracking-tight text-[var(--ink)]">
+              Vizhi
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="border border-[#1f5c46] px-[5px] py-px text-[10px] font-bold tracking-wider text-[var(--ok)]">
+                LIVE
+              </span>
+              <span className="font-mono text-[11px] text-[var(--ink-tertiary)]">
+                gateway
+              </span>
+            </span>
+          </span>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto pb-4">
+          {navSections.map((section) => (
+            <div key={section.title} className="flex flex-col">
+              <p className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-tertiary)]">
+                {section.title}
+              </p>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors",
+                      active
+                        ? "bg-[var(--surface-strong)] font-semibold text-[var(--ink)] shadow-[inset_2px_0_0_var(--brand-hover)]"
+                        : "font-medium text-[var(--ink-secondary)] hover:text-[var(--ink)]",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-4 w-4",
+                        active ? "text-[var(--accent)]" : "text-[var(--ink-tertiary)]",
+                      )}
+                    />
+                    <span className="flex-1">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </aside>
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-white/10 bg-[#080a0d]/85 backdrop-blur">
-          <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[var(--muted)] md:max-w-xl">
-              <Search className="h-4 w-4 shrink-0" />
-              <span className="truncate">Search agents, model tokens, CIDs, request IDs</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {user ? (
-                <span className="hidden max-w-52 truncate text-xs text-[var(--muted)] sm:block">
-                  {user.email}
+
+      <div className="min-w-0 flex-1">
+        {/* ── Topbar (48px, mockup: #0A0A0B) ──────────────────────────── */}
+        <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--canvas)]">
+          <div className="flex min-h-12 flex-wrap items-center justify-between gap-2.5 px-4">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex flex-wrap items-center gap-1 text-[13px]"
+            >
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-2 pr-2 font-bold tracking-tight text-[var(--ink)]"
+              >
+                <span className="flex h-[22px] w-[22px] items-center justify-center bg-[var(--brand)] text-xs font-bold text-[var(--brand-ink)]">
+                  V
                 </span>
-              ) : null}
-              <Button variant="secondary" size="sm">
-                <Link href="/monitoring">Live</Link>
-              </Button>
-              <Button variant="ghost" size="icon" title="Logout" onClick={logout}>
+                Vizhi
+              </Link>
+              <span aria-hidden className="px-0.5 text-base text-[#3a3a42]">
+                /
+              </span>
+              <span className="truncate font-semibold text-[var(--ink)]">
+                {currentLabel}
+              </span>
+            </nav>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center gap-2.5 border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-xs text-[var(--ink-secondary)] transition-colors hover:text-[var(--ink)]"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Search</span>
+                <kbd className="hidden border border-[var(--line-strong)] px-1 font-mono text-[11px] sm:inline">
+                  ⌘K
+                </kbd>
+              </button>
+              <a
+                href="http://localhost:3001/docs"
+                target="_blank"
+                rel="noreferrer"
+                className="hidden px-2.5 py-1.5 text-[13px] font-medium text-[#d4d4d8] transition-colors hover:text-[var(--ink)] md:inline"
+              >
+                Docs
+              </a>
+              <ThemeToggle />
+              <button
+                type="button"
+                aria-label="Account menu"
+                title={user?.email ?? ""}
+                className="flex h-[30px] w-[30px] items-center justify-center border border-[var(--line-strong)] bg-[var(--muted-soft)] text-[11px] font-bold text-[var(--ink)]"
+              >
+                {initials || "V"}
+              </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Logout"
+                onClick={logout}
+                className="border border-transparent hover:border-[var(--line)] hover:bg-[var(--surface)]"
+              >
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </header>
-        <main className="px-4 py-6 md:px-6">{children}</main>
+
+        <main className="px-6 py-8 md:px-10">{children}</main>
       </div>
+
+      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -36,6 +37,60 @@ from app.services.persistence import (
 from app.config.settings import settings
 from app.services.router import provider_router, FallbackResult
 from app.services.budget import check_agent_budget, check_model_budget
+from app.providers.base import ProviderResponse
+
+
+def _parse_sse_payload(line: str) -> dict | None:
+    trimmed = line.strip()
+    if not trimmed.startswith("data: "):
+        return None
+    payload = trimmed[6:]
+    if not payload or payload == "[DONE]":
+        return None
+    try:
+        return json.loads(payload)
+    except Exception:
+        return None
+
+
+def _extract_sse_text(payload: dict) -> str:
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] or {}
+        delta = first.get("delta") or {}
+        if isinstance(delta, dict) and delta.get("content") is not None:
+            return str(delta.get("content") or "")
+        # Reasoning models (DeepSeek-R1 etc.) stream their chain-of-thought
+        # in `delta.reasoning_content` — it is NOT part of the answer, so it
+        # is deliberately excluded from the persisted/displayed content.
+    return ""
+
+
+def _strip_reasoning(text: str) -> str:
+    """Remove a leading ```` block from a completed answer.
+
+    Some OpenAI-compatible backends (HF router serving DeepSeek-R1) merge
+    the model's chain-of-thought into `content` wrapped in <think> tags
+    instead of keeping it in `reasoning_content`. The gateway forwards the
+    raw stream to the client untouched, but the *persisted* answer (and the
+    SDK's assembled ChatAnswer) should contain only the real response.
+    """
+    if "</think>" not in text:
+        return text
+    # Keep everything after the closing tag; if a stray opening tag exists
+    # without a close, drop from the opening tag onward.
+    _, _, after = text.partition("</think>")
+    return after.lstrip()
+
+
+def _extract_sse_finish_reason(payload: dict) -> str | None:
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] or {}
+        finish_reason = first.get("finish_reason")
+        if finish_reason is not None:
+            return str(finish_reason)
+    return None
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -83,7 +138,7 @@ async def chat_completions(
     if credential.token_type == "agent":
         # Resolve provider name for persisting the query (no actual call yet)
         try:
-            _tmp_provider, resolved_model = provider_router.resolve(model_name, body.call_sdk)
+            _tmp_provider, resolved_model = await provider_router.resolve(model_name, body.call_sdk)
             provider_name = _tmp_provider.provider_name
         except ValueError:
             provider_name = "agent"
@@ -148,7 +203,7 @@ async def chat_completions(
     if body.stream and credential.token_type != "agent":
         # Validate provider before opening the stream
         try:
-            _primary_provider, _primary_model = provider_router.resolve(model_name, body.call_sdk)
+            _primary_provider, _primary_model = await provider_router.resolve(model_name, body.call_sdk)
             provider_name = _primary_provider.provider_name
             resolved_model = _primary_model
         except ValueError as exc:
@@ -167,6 +222,34 @@ async def chat_completions(
         await db.commit()
 
         async def _event_stream() -> AsyncGenerator[bytes, None]:
+            final_provider_name = provider_name
+            final_model_name = resolved_model
+            chunks: list[str] = []
+            stream_error: str | None = None
+            was_cancelled = False
+            usage_prompt_tokens = 0
+            usage_completion_tokens = 0
+            latency_ms = 0
+            finish_reason = "stop"
+            stream_meta: dict = {}
+            stream_start_ns = time.perf_counter_ns()
+            metadata_sent = False
+
+            def _metadata_event_bytes() -> bytes:
+                """SSE event carrying vizhi_metadata so streaming SDK clients
+                can read provider / latency / query_id / fallback info."""
+                vm = {
+                    "agent_id": credential.principal_id,
+                    "provider": stream_meta.get("final_provider") or final_provider_name,
+                    "model": final_model_name,
+                    "latency_ms": int((time.perf_counter_ns() - stream_start_ns) // 1_000_000),
+                    "query_id": query_row.id,
+                    "used_fallback": bool(stream_meta.get("used_fallback", False)),
+                    "fallback_attempts": list(stream_meta.get("fallback_attempts", [])),
+                    "original_provider": stream_meta.get("original_provider"),
+                }
+                return (f"data: {json.dumps({'vizhi_metadata': vm})}\n\n").encode()
+
             try:
                 if settings.fallback_enabled:
                     gen = provider_router.chat_with_fallback_stream(
@@ -177,8 +260,16 @@ async def chat_completions(
                         max_tokens=body.max_tokens,
                         max_retries_per_provider=settings.fallback_max_retries_per_provider,
                         base_backoff_seconds=settings.fallback_base_backoff_seconds,
+                        meta_out=stream_meta,
                     )
                 else:
+                    stream_meta = {
+                        "final_provider": provider_name,
+                        "final_model": resolved_model,
+                        "used_fallback": False,
+                        "original_provider": None,
+                        "fallback_attempts": [],
+                    }
                     gen = _primary_provider.chat_completion_stream(
                         model=resolved_model,
                         messages=messages_raw,
@@ -187,15 +278,111 @@ async def chat_completions(
                     )
 
                 async for line in gen:
+                    event = _parse_sse_payload(line)
+                    if event:
+                        if event.get("model"):
+                            final_model_name = event.get("model") or final_model_name
+                        if event.get("vizhi_metadata"):
+                            vm = event["vizhi_metadata"] or {}
+                            final_provider_name = vm.get("provider") or final_provider_name
+                            final_model_name = vm.get("model") or final_model_name
+                            latency_ms = int(vm.get("latency_ms") or latency_ms or 0)
+                        choice = (event.get("choices") or [{}])[0]
+                        token = _extract_sse_text(event)
+                        if token:
+                            chunks.append(token)
+                        parsed_finish_reason = _extract_sse_finish_reason(event)
+                        if parsed_finish_reason:
+                            finish_reason = parsed_finish_reason
+                        usage = event.get("usage") or {}
+                        usage_prompt_tokens = int(usage.get("prompt_tokens") or usage_prompt_tokens or 0)
+                        usage_completion_tokens = int(usage.get("completion_tokens") or usage_completion_tokens or 0)
+                    # Inject the vizhi_metadata event just before the stream
+                    # terminator so SDK clients receive full metadata.
+                    if not metadata_sent and line.strip() == "data: [DONE]":
+                        metadata_sent = True
+                        yield _metadata_event_bytes()
                     yield (line + "\n\n").encode()
 
+                # Provider stream ended without [DONE] — still emit metadata.
+                if not metadata_sent:
+                    metadata_sent = True
+                    yield _metadata_event_bytes()
+
+            except asyncio.CancelledError:
+                was_cancelled = True
+                raise
             except Exception as exc:
                 logger.exception("Streaming error for query=%s", query_row.id)
+                stream_error = str(exc)
                 error_payload = json.dumps({
                     "error": {"message": str(exc), "type": "stream_error"},
                 })
                 yield (f"data: {error_payload}\n\n").encode()
                 yield b"data: [DONE]\n\n"
+            finally:
+                final_latency_ms = latency_ms or int(
+                    (time.perf_counter_ns() - stream_start_ns) // 1_000_000
+                )
+                try:
+                    if stream_error:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            status_code=502,
+                            error_message=stream_error,
+                            latency_ms=final_latency_ms,
+                        )
+                    elif was_cancelled:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            status_code=499,
+                            error_message="Streaming cancelled by client",
+                            latency_ms=final_latency_ms,
+                        )
+                    else:
+                        await persist_response(
+                            db,
+                            query_id=query_row.id,
+                            provider_response=ProviderResponse(
+                                provider=final_provider_name,
+                                model=final_model_name,
+                                content=_strip_reasoning("".join(chunks)),
+                                raw_response={
+                                    "id": f"stream_{query_row.id}",
+                                    "object": "chat.completion",
+                                    "model": final_model_name,
+                                    "choices": [
+                                        {
+                                            "index": 0,
+                                            "message": {"role": "assistant", "content": _strip_reasoning("".join(chunks))},
+                                            "finish_reason": "stop",
+                                        }
+                                    ],
+                                    "usage": {
+                                        "prompt_tokens": usage_prompt_tokens,
+                                        "completion_tokens": usage_completion_tokens,
+                                        "total_tokens": usage_prompt_tokens + usage_completion_tokens,
+                                    },
+                                },
+                                input_tokens=usage_prompt_tokens,
+                                output_tokens=usage_completion_tokens,
+                                finish_reason=finish_reason,
+                                latency_ms=final_latency_ms,
+                            ),
+                            status_code=200,
+                            model_connection_id=(
+                                credential.principal_id
+                                if credential.token_type == "model"
+                                else None
+                            ),
+                        )
+                    await db.commit()
+                except Exception:
+                    logger.exception("Failed to persist streaming response for query=%s", query_row.id)
+                    with contextlib.suppress(Exception):
+                        await db.rollback()
 
         return StreamingResponse(
             _event_stream(),
@@ -212,7 +399,7 @@ async def chat_completions(
 
     # Validate model resolves before persisting the query
     try:
-        _primary_provider, _primary_model = provider_router.resolve(model_name, body.call_sdk)
+        _primary_provider, _primary_model = await provider_router.resolve(model_name, body.call_sdk)
         provider_name = _primary_provider.provider_name
         resolved_model = _primary_model
     except ValueError as exc:
@@ -257,7 +444,7 @@ async def chat_completions(
                 temperature=body.temperature,
                 max_tokens=body.max_tokens,
             )
-            from app.services.router import FallbackResult as _FR, ProviderResponse  # noqa
+            from app.services.router import FallbackResult as _FR  # noqa
             fallback_result = _FR(
                 response=result_direct,
                 final_provider=provider_name,
@@ -291,7 +478,15 @@ async def chat_completions(
 
     # The log row and usage stats are written after the reply is on its way,
     # on a session of their own; the caller does not wait on those writes.
-    _spawn(_persist_response_async(query_id=query_row.id, provider_response=result))
+    _spawn(
+        _persist_response_async(
+            query_id=query_row.id,
+            provider_response=result,
+            model_connection_id=(
+                credential.principal_id if credential.token_type == "model" else None
+            ),
+        )
+    )
 
     return ChatCompletionResponse(
         id=f"vzr_{uuid.uuid4().hex[:12]}",
@@ -333,7 +528,9 @@ def _spawn(coro) -> asyncio.Task:
     return task
 
 
-async def _persist_response_async(*, query_id: str, provider_response) -> None:
+async def _persist_response_async(
+    *, query_id: str, provider_response, model_connection_id: str | None
+) -> None:
     """Write the response row and token usage stats off the request path."""
     try:
         async with async_session_factory() as db:
@@ -342,6 +539,7 @@ async def _persist_response_async(*, query_id: str, provider_response) -> None:
                 query_id=query_id,
                 provider_response=provider_response,
                 status_code=200,
+                model_connection_id=model_connection_id,
             )
             await db.commit()
     except Exception as exc:

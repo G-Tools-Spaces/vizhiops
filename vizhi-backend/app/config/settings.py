@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     db_pool_recycle: int = 300
 
     # ── Inference routing ───────────────────────────────────────────────
-    inference_backend: str = "huggingface"
+    # "auto" routes each provider to its own backend (openai → OpenAI,
+    # nvidia → NVIDIA NIM, huggingface → HF, …). A comma-separated list
+    # (e.g. "custom,huggingface") forces a legacy override order.
+    inference_backend: str = "auto"
     inference_model_map: str = ""
     hf_token: str = ""
     huggingface_api_key: str = ""
@@ -47,6 +50,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     qwen_api_key: str = ""
+
+    # ── NVIDIA NIM (build.nvidia.com) ───────────────────────────────────
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
 
     # ── Self-hosted endpoints ───────────────────────────────────────────
     ollama_base_url: str = "http://localhost:11434"

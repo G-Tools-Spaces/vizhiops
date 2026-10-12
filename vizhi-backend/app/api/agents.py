@@ -135,6 +135,7 @@ async def update_agent(
         row.status = body.status
 
     await db.flush()
+    await db.refresh(row)
     return _agent_to_response(row)
 
 

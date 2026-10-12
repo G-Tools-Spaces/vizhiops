@@ -440,6 +440,8 @@ export const api = {
       outputTokens: req.output_tokens,
       estimatedCost: req.estimated_cost,
       errorMessage: req.error_message,
+      prompt: req.prompt ?? [],
+      responseText: req.response_text ?? "",
     };
   },
 

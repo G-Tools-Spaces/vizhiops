@@ -71,6 +71,7 @@ async def persist_response(
     status_code: int = 200,
     error_message: str | None = None,
     latency_ms: int = 0,
+    model_connection_id: str | None = None,
 ) -> ResponseRow:
     """Save the provider response (or error) after the call."""
     row = ResponseRow(
@@ -82,7 +83,7 @@ async def persist_response(
         output_tokens=provider_response.output_tokens if provider_response else 0,
         status_code=status_code,
         error_message=error_message,
-        estimated_cost=_estimate_cost(provider_response) if provider_response else 0.0,
+        estimated_cost=(await _estimate_cost(provider_response)) if provider_response else 0.0,
         timestamp=_utcnow(),
     )
     db.add(row)
@@ -90,12 +91,23 @@ async def persist_response(
 
     # Increment model connection usage count and update stats.
     if provider_response and status_code < 400:
-        result = await db.execute(
-            select(ModelConnectionRow).where(
-                ModelConnectionRow.model_name == provider_response.model,
-                ModelConnectionRow.status == "active",
+        if model_connection_id:
+            # Exact match — the caller knows which connection made the call.
+            # (Name matching is unreliable: providers return their own model
+            # ids, e.g. "gpt-4o-mini-2024-07-18" vs catalog
+            # "openai/gpt-4o-mini", so usage_count never incremented.)
+            result = await db.execute(
+                select(ModelConnectionRow).where(
+                    ModelConnectionRow.id == model_connection_id
+                )
             )
-        )
+        else:
+            result = await db.execute(
+                select(ModelConnectionRow).where(
+                    ModelConnectionRow.model_name == provider_response.model,
+                    ModelConnectionRow.status == "active",
+                )
+            )
         mc = result.scalars().first()
         if mc:
             mc.usage_count += 1
@@ -228,16 +240,28 @@ async def complete_agent_job(
     job.completed_at = _utcnow()
     job.updated_at = _utcnow()
 
+    usage = usage or {}
+    input_tokens = int(usage.get("prompt_tokens", 0) or 0)
+    output_tokens = int(usage.get("completion_tokens", 0) or 0)
+    # Prefer an explicit cost reported by the agent; otherwise estimate from
+    # token usage so agent budget enforcement accumulates spend.
+    try:
+        estimated_cost = float(usage.get("estimated_cost", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        estimated_cost = 0.0
+    if estimated_cost == 0.0 and (input_tokens or output_tokens):
+        estimated_cost = await _estimate_cost_from_tokens(job.provider, input_tokens, output_tokens)
+
     response_row = ResponseRow(
         id=f"r_{_id()}",
         query_id=job.query_id,
         response=json.dumps(output),
-        latency_ms=int((usage or {}).get("latency_ms", 0)),
-        input_tokens=int((usage or {}).get("prompt_tokens", 0)),
-        output_tokens=int((usage or {}).get("completion_tokens", 0)),
+        latency_ms=int(usage.get("latency_ms", 0) or 0),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         status_code=200 if status == "completed" else 500,
         error_message=error or None,
-        estimated_cost=0.0,
+        estimated_cost=estimated_cost,
         timestamp=_utcnow(),
     )
     db.add(response_row)
@@ -493,19 +517,112 @@ async def _build_timeseries(
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 
-def _estimate_cost(resp: ProviderResponse) -> float:
-    """Rough cost estimation per 1K tokens.  Very approximate for P0."""
-    # Simplified pricing (USD per 1K tokens)
-    _pricing: dict[str, tuple[float, float]] = {
-        "openai": (0.005, 0.015),
-        "anthropic": (0.003, 0.015),
-        "gemini": (0.001, 0.002),
-        "qwen": (0.002, 0.006),
-        "local": (0.0, 0.0),
-    }
-    input_rate, output_rate = _pricing.get(resp.provider, (0.005, 0.015))
+# Rough USD pricing per 1K tokens (input, output). Very approximate for P0.
+# Per-1K-token USD prices (input, output). These are blended estimates for
+# each provider's typical model mix — good enough for spend tracking and
+# budget enforcement, not billing. Unknown providers fall back to the
+# mid-tier default so cost is never silently zero.
+_PRICING_PER_1K: dict[str, tuple[float, float]] = {
+    "openai": (0.005, 0.015),
+    "anthropic": (0.003, 0.015),
+    "gemini": (0.001, 0.002),
+    "qwen": (0.002, 0.006),
+    "nvidia": (0.0006, 0.0018),
+    # Open models via the HF router are metered by Nebius/HF at low but
+    # non-zero rates — estimate from their blended per-token pricing.
+    "huggingface": (0.0002, 0.0006),
+    "hf": (0.0002, 0.0006),
+    "local": (0.0, 0.0),  # self-hosted — genuinely free
+}
+
+# Default for admin-added (catalog) providers and anything unmapped.
+_DEFAULT_PRICING: tuple[float, float] = (0.0005, 0.0015)
+
+
+async def _estimate_cost_from_tokens(
+    provider: str,
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None = None,
+) -> float:
+    """Estimate USD cost from token counts for the given provider.
+
+    Resolution order for the per-1K rates:
+    1. Per-model pricing from the catalog (``catalog_models.input_price`` /
+       ``output_price``) — admin-editable, most accurate.
+    2. Per-provider blended rates from ``_PRICING_PER_1K``.
+    3. ``_DEFAULT_PRICING`` for anything unmapped.
+    """
+    input_rate, output_rate = await _resolve_pricing(provider, model)
     return round(
-        (resp.input_tokens / 1000) * input_rate
-        + (resp.output_tokens / 1000) * output_rate,
-        4,
+        (input_tokens / 1000) * input_rate
+        + (output_tokens / 1000) * output_rate,
+        6,
+    )
+
+
+async def _resolve_pricing(provider: str, model: str | None) -> tuple[float, float]:
+    """Return (input_rate, output_rate) per 1K tokens for provider/model."""
+    if model:
+        per_model = await _lookup_model_pricing(provider, model)
+        if per_model is not None:
+            return per_model
+    return _PRICING_PER_1K.get(provider.lower(), _DEFAULT_PRICING)
+
+
+# Short TTL cache for catalog model pricing — avoids a DB hit per request;
+# a freshly edited price is picked up within 30s.
+_model_pricing_cache: dict[str, tuple[float, float, float]] = {}  # key → (in, out, expiry)
+_MODEL_PRICING_TTL_SECONDS = 30.0
+
+
+async def _lookup_model_pricing(provider: str, model: str) -> tuple[float, float] | None:
+    """Return catalog per-model (input, output) rates, or None if unset."""
+    import time as _time
+
+    key = f"{provider.lower()}/{model}"
+    now = _time.monotonic()
+    cached = _model_pricing_cache.get(key)
+    if cached is not None and cached[2] > now:
+        return (cached[0], cached[1])
+
+    # The catalog stores models as "provider/model-id"; the router strips
+    # the provider prefix, so reconstruct it for the lookup.
+    catalog_id = model if model.startswith(f"{provider.lower()}/") else f"{provider.lower()}/{model}"
+
+    row = await _fetch_model_pricing(catalog_id)
+    if row is None:
+        return None
+
+    input_price, output_price = row
+    _model_pricing_cache[key] = (input_price, output_price, now + _MODEL_PRICING_TTL_SECONDS)
+    return (input_price, output_price)
+
+
+async def _fetch_model_pricing(catalog_id: str) -> tuple[float, float] | None:
+    """Fetch per-model pricing from the catalog DB."""
+    from sqlalchemy import select
+
+    from app.db.session import async_session_factory
+    from app.models.db_models import CatalogModelRow
+
+    async with async_session_factory() as db:
+        row = (
+            await db.execute(
+                select(
+                    CatalogModelRow.input_price,
+                    CatalogModelRow.output_price,
+                ).where(CatalogModelRow.id == catalog_id)
+            )
+        ).first()
+
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return (float(row[0]), float(row[1]))
+
+
+async def _estimate_cost(resp: ProviderResponse) -> float:
+    """Estimate cost per 1K tokens — per-model catalog pricing when set."""
+    return await _estimate_cost_from_tokens(
+        resp.provider, resp.input_tokens, resp.output_tokens, model=resp.model
     )

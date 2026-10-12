@@ -90,6 +90,14 @@ _PROVIDERS_TO_CHECK: list[dict] = [
         "requires_key": "qwen_api_key",
     },
     {
+        "name": "nvidia",
+        "label": "NVIDIA NIM",
+        "probe_url": f"{settings.nvidia_base_url.rstrip('/').removesuffix('/v1')}/v1/models",
+        "method": "GET",
+        "headers_fn": lambda: {"Authorization": f"Bearer {settings.nvidia_api_key}"},
+        "requires_key": "nvidia_api_key",
+    },
+    {
         "name": "local",
         "label": "Local / Ollama",
         "probe_url": f"{settings.ollama_base_url.rstrip('/')}/api/tags",
@@ -276,11 +284,56 @@ def _now() -> str:
 
 # ── Full health check sweep ─────────────────────────────────────────────
 
+async def _catalog_provider_configs() -> list[dict]:
+    """Build probe configs for admin-added providers (catalog_providers rows
+    with stored credentials). These are probed with their own base_url + key,
+    so Nebius/Groq/etc. show up on the Health page like the built-ins."""
+    from sqlalchemy import select
+
+    from app.db.session import async_session_factory
+    from app.models.db_models import CatalogProviderRow
+
+    try:
+        async with async_session_factory() as db:
+            rows = (
+                await db.execute(
+                    select(CatalogProviderRow).where(
+                        CatalogProviderRow.api_key.isnot(None),
+                        CatalogProviderRow.base_url.isnot(None),
+                    )
+                )
+            ).scalars().all()
+    except Exception:
+        return []  # DB unavailable — skip catalog probes this cycle
+
+    configs = []
+    for row in rows:
+        if not row.api_key or not row.base_url:
+            continue
+        base = row.base_url.rstrip("/").removesuffix("/v1")
+        configs.append(
+            {
+                "name": row.id,
+                "label": row.label,
+                "probe_url": f"{base}/v1/models",
+                "method": "GET",
+                "headers_fn": lambda k=row.api_key: {"Authorization": f"Bearer {k}"},
+                "requires_key": None,  # credentials already in hand
+            }
+        )
+    return configs
+
+
 async def run_health_checks() -> None:
-    """Probe all providers concurrently and update the in-memory cache."""
+    """Probe all providers concurrently and update the in-memory cache.
+
+    Covers both the hardcoded built-ins and any admin-added catalog
+    providers that have credentials stored.
+    """
     async with _check_lock:
+        catalog_configs = await _catalog_provider_configs()
         results = await asyncio.gather(
-            *[_probe_provider(cfg) for cfg in _PROVIDERS_TO_CHECK],
+            *[_probe_provider(cfg) for cfg in _PROVIDERS_TO_CHECK + catalog_configs],
             return_exceptions=True,
         )
         for item in results:

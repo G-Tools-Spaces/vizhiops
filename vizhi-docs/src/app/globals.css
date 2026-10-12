@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/*
+ * Vizhi API reference — Supabase/Memora-style, light-first with a dark mode.
+ *
+ * A near-white canvas, hairline grey borders instead of shadows, 6px radii,
+ * and a single iris brand colour that only appears on primary actions and
+ * active navigation. Status colours stay muted so a red or amber badge is
+ * still the loudest thing on a page.
+ *
+ * Every colour is a CSS variable on `:root` (light) overridden in `.dark`, and
+ * surfaced to Tailwind through `@theme inline`, so utilities like `bg-canvas`
+ * and `text-ink` reskin automatically when the theme flips.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces. `canvas` is the page, `panel` the cards/code blocks on it,
+     `surface` the quiet fills (table headers, hovers). */
+  --canvas: #fafbfd;
+  --panel: #ffffff;
+  --surface: #f6f7fa;
+  --surface-strong: #eef0f5;
+  --topbar: #ffffff;
+  --topbar-hover: #eef0f5;
+
+  /* Text. */
+  --ink: #16181d;
+  --ink-secondary: #5d6470;
+  --ink-tertiary: #878e9b;
+
+  /* Hairlines. */
+  --line: #e7e9ef;
+  --line-soft: #f0f1f5;
+
+  /* Brand. */
+  --brand: #5457e0;
+  --brand-hover: #4648c9;
+  --brand-ink: #ffffff;
+  --accent: #4f52d6;
+  --accent-hover: #4043b8;
+  --accent-soft: #eeeefc;
+
+  /* Status. */
+  --ok: #0a7c42;
+  --ok-soft: #edf9f3;
+  --warn: #8f6a1e;
+  --warn-soft: #fdf6e6;
+  --danger: #c33d34;
+  --danger-soft: #fdf2f1;
+  --info: #2a6fb0;
+  --info-soft: #eff5fb;
+
+  --muted: #5d6470;
+  --muted-soft: #eef0f5;
+
+  /* Syntax highlighting (Prism tokens). */
+  --syn-keyword: #6d28d9;
+  --syn-string: #0e7490;
+  --syn-number: #b45309;
+  --syn-function: #1d4ed8;
+  --syn-property: #0f766e;
+  --syn-operator: #5d6470;
+  --syn-comment: #878e9b;
+  --syn-punctuation: #878e9b;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #0c0e13;
+  --panel: #12151c;
+  --surface: #171b24;
+  --surface-strong: #1d222d;
+  --topbar: #12151c;
+  --topbar-hover: #1d222d;
+
+  --ink: #f3f5f8;
+  --ink-secondary: #9aa3b2;
+  --ink-tertiary: #6d7686;
+
+  --line: #232936;
+  --line-soft: #1a1f29;
+
+  --brand: #6f72f0;
+  --brand-hover: #8a8df5;
+  --brand-ink: #0a0a14;
+  --accent: #9b9df6;
+  --accent-hover: #b6b7fa;
+  --accent-soft: rgba(111, 114, 240, 0.14);
+
+  --ok: #4fd1a5;
+  --ok-soft: rgba(79, 209, 165, 0.12);
+  --warn: #f5c451;
+  --warn-soft: rgba(245, 196, 81, 0.12);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.12);
+  --info: #7cc7ff;
+  --info-soft: rgba(124, 199, 255, 0.12);
+
+  --muted: #9aa3b2;
+  --muted-soft: #1d222d;
+
+  /* Syntax highlighting (Prism tokens). */
+  --syn-keyword: #b6b7fa;
+  --syn-string: #7dd3fc;
+  --syn-number: #fbbf24;
+  --syn-function: #93c5fd;
+  --syn-property: #5eead4;
+  --syn-operator: #9aa3b2;
+  --syn-comment: #6d7686;
+  --syn-punctuation: #6d7686;
+}
+
+/* Expose the variables above as Tailwind colour utilities. `inline` means the
+   utility emits `var(--canvas)` rather than a resolved value, so the `.dark`
+   override is picked up without recompiling anything. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-topbar: var(--topbar);
+  --color-topbar-hover: var(--topbar-hover);
+
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-tertiary: var(--ink-tertiary);
+
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+html,
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Focus ring: visible for keyboard users, iris to match the brand. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* Thin grey scrollbars inside panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* Prism token theme — driven by the --syn-* variables above, so code samples
+   follow the light/dark theme like everything else. */
+.token.comment,
+.token.prolog,
+.token.cdata {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.token.punctuation {
+  color: var(--syn-punctuation);
+}
+.token.keyword,
+.token.selector,
+.token.important,
+.token.atrule {
+  color: var(--syn-keyword);
+}
+.token.string,
+.token.char,
+.token.attr-value,
+.token.template-string,
+.token.regex {
+  color: var(--syn-string);
+}
+.token.number,
+.token.boolean,
+.token.constant,
+.token.symbol {
+  color: var(--syn-number);
+}
+.token.function,
+.token.class-name,
+.token.maybe-class-name {
+  color: var(--syn-function);
+}
+.token.property,
+.token.attr-name,
+.token.parameter {
+  color: var(--syn-property);
+}
+.token.operator,
+.token.url {
+  color: var(--syn-operator);
+}

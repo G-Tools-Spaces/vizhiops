@@ -115,14 +115,14 @@ export default function ConnectModelPage() {
             </div>
             <div className="space-y-2">
               <Label>
-                Token Name <span className="text-[var(--muted)] font-normal">(optional)</span>
+                Token Name <span className="text-[var(--ink-tertiary)] font-normal">(optional)</span>
               </Label>
               <Input
                 {...register("tokenName")}
                 placeholder="e.g. production-gpt4o"
                 maxLength={120}
               />
-              <p className="text-xs text-[var(--muted)]">A friendly label shown in the token list</p>
+              <p className="text-xs text-[var(--ink-tertiary)]">A friendly label shown in the token list</p>
               <FieldError message={errors.tokenName} />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -136,10 +136,10 @@ export default function ConnectModelPage() {
               </Button>
             </div>
             {generatedToken ? (
-              <div className="md:col-span-2 rounded-lg border border-slate-500/20 bg-slate-950/80 p-4 text-sm text-slate-100">
+              <div className="md:col-span-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--ink)]">
                 <p className="font-semibold">Vizhi model token created</p>
                 <p className="mt-2 break-all text-xs">{generatedToken}</p>
-                <p className="mt-2 text-[var(--muted)]">This token is shown only once. Store it securely.</p>
+                <p className="mt-2 text-[var(--ink-tertiary)]">This token is shown only once. Store it securely.</p>
               </div>
             ) : null}
           </CardContent>
@@ -148,11 +148,11 @@ export default function ConnectModelPage() {
           <CardHeader>
             <CardTitle>Security Contract</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-[var(--muted)]">
+          <CardContent className="space-y-4 text-sm text-[var(--ink-tertiary)]">
               <p>
               Vizhi generates a reusable model token and stores only a masked version. The raw token is shown once after creation.
               </p>
-            <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 p-3 text-emerald-100">
+            <div className="rounded-md border border-[var(--ok)]/30 bg-[var(--ok-soft)] p-3 text-[var(--ok)]">
               <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Token creation is handled by Vizhi</span>
             </div>
           </CardContent>

@@ -13,8 +13,9 @@
  *   onClose   – called when the panel should be dismissed
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   useAgentBudget,
@@ -43,12 +44,12 @@ function pct(spent: number, limit: number | null): number {
 
 function ProgressBar({ value, exceeded }: { value: number; exceeded: boolean }) {
   const color = exceeded
-    ? "bg-red-500"
+    ? "bg-[var(--danger)]"
     : value >= 80
-    ? "bg-yellow-400"
-    : "bg-emerald-500";
+    ? "bg-[var(--warn)]"
+    : "bg-[var(--ok)]";
   return (
-    <div className="w-full h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+    <div className="w-full h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
       <div
         className={`h-full rounded-full transition-all ${color}`}
         style={{ width: `${value}%` }}
@@ -98,7 +99,7 @@ function BudgetForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {data.budget_usd !== null && (
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-[var(--muted)]">
+              <div className="flex justify-between text-xs text-[var(--ink-tertiary)]">
                 <span>Cost</span>
                 <span>
                   {fmtUsd(data.spent_usd)} / {fmtUsd(data.budget_usd)}
@@ -106,7 +107,7 @@ function BudgetForm({
               </div>
               <ProgressBar value={usdPct} exceeded={data.exceeded} />
               {data.remaining_usd !== null && (
-                <div className="text-xs text-[var(--muted)]">
+                <div className="text-xs text-[var(--ink-tertiary)]">
                   {data.remaining_usd <= 0
                     ? "Limit reached"
                     : `${fmtUsd(data.remaining_usd)} remaining`}
@@ -116,7 +117,7 @@ function BudgetForm({
           )}
           {data.budget_tokens !== null && (
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-[var(--muted)]">
+              <div className="flex justify-between text-xs text-[var(--ink-tertiary)]">
                 <span>Tokens</span>
                 <span>
                   {fmtTokens(data.spent_tokens)} / {fmtTokens(data.budget_tokens)}
@@ -124,7 +125,7 @@ function BudgetForm({
               </div>
               <ProgressBar value={tokPct} exceeded={data.exceeded} />
               {data.remaining_tokens !== null && (
-                <div className="text-xs text-[var(--muted)]">
+                <div className="text-xs text-[var(--ink-tertiary)]">
                   {data.remaining_tokens <= 0
                     ? "Limit reached"
                     : `${fmtTokens(data.remaining_tokens)} remaining`}
@@ -136,7 +137,7 @@ function BudgetForm({
       )}
 
       {!hasLimits && (
-        <p className="text-xs text-[var(--muted)] italic">
+        <p className="text-xs text-[var(--ink-tertiary)] italic">
           No budget limits configured — this token can make unlimited requests.
         </p>
       )}
@@ -144,7 +145,7 @@ function BudgetForm({
       {/* Edit fields */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted)]">Max spend (USD)</span>
+          <span className="text-xs font-medium text-[var(--ink-tertiary)]">Max spend (USD)</span>
           <input
             type="number"
             min="0"
@@ -152,11 +153,11 @@ function BudgetForm({
             placeholder="e.g. 5.00 (leave blank = unlimited)"
             value={usdStr}
             onChange={(e) => setUsdStr(e.target.value)}
-            className="rounded border border-[var(--border)] bg-[var(--card)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--muted)]">Max tokens</span>
+          <span className="text-xs font-medium text-[var(--ink-tertiary)]">Max tokens</span>
           <input
             type="number"
             min="0"
@@ -164,22 +165,22 @@ function BudgetForm({
             placeholder="e.g. 100000 (leave blank = unlimited)"
             value={tokStr}
             onChange={(e) => setTokStr(e.target.value)}
-            className="rounded border border-[var(--border)] bg-[var(--card)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
           />
         </label>
       </div>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-[var(--muted)]">
+        <span className="text-xs font-medium text-[var(--ink-tertiary)]">
           Budget window resets at (ISO-8601, optional)
         </span>
         <input
           type="datetime-local"
           value={resetAt ? resetAt.slice(0, 16) : ""}
           onChange={(e) => setResetAt(e.target.value ? e.target.value + ":00Z" : "")}
-          className="rounded border border-[var(--border)] bg-[var(--card)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
         />
-        <span className="text-[10px] text-[var(--muted)]">
+        <span className="text-[10px] text-[var(--ink-tertiary)]">
           After this date/time the spent counter resets to zero.
         </span>
       </label>
@@ -218,6 +219,34 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
   const query = isAgent ? agentBudget : modelBudget;
   const mutation = isAgent ? updateAgent : updateModel;
 
+  // ── Budget alerts ──────────────────────────────────────────────────────
+  // Fire a toast once per state transition (ok → warning → exceeded) so the
+  // user is notified without being spammed on every refetch.
+  const data = query.data;
+  const usdPct = data ? pct(data.spent_usd, data.budget_usd) : 0;
+  const tokPct = data ? pct(data.spent_tokens, data.budget_tokens) : 0;
+  const worstPct = Math.max(usdPct, tokPct);
+  const alertState = !data ? "loading" : data.exceeded ? "exceeded" : worstPct >= 80 ? "warning" : "ok";
+
+  const lastAlerted = useRef<string | null>(null);
+  useEffect(() => {
+    if (alertState === "loading" || alertState === "ok") {
+      lastAlerted.current = alertState;
+      return;
+    }
+    if (lastAlerted.current === alertState) return;
+    lastAlerted.current = alertState;
+    if (alertState === "exceeded") {
+      toast.error(`Budget exceeded for ${label}`, {
+        description: "Requests will be rejected until limits are raised or the window resets.",
+      });
+    } else {
+      toast.warning(`Budget at ${worstPct}% for ${label}`, {
+        description: "This token is approaching its configured limit.",
+      });
+    }
+  }, [alertState, worstPct, label]);
+
   const handleSave = (
     usd: number | null,
     tokens: number | null,
@@ -231,47 +260,65 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
   };
 
   return (
-    <div className="mt-2 ml-2 mr-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+    <div className="mt-2 ml-2 mr-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
           <h4 className="text-sm font-semibold">Budget limits</h4>
-          <p className="text-xs text-[var(--muted)] mt-0.5">
+          <p className="text-xs text-[var(--ink-tertiary)] mt-0.5">
             {label} · {isAgent ? "agent token" : "model token"}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {query.data?.exceeded && (
-            <span className="flex items-center gap-1 text-xs text-red-400">
+            <span className="flex items-center gap-1 text-xs text-[var(--danger)]">
               <AlertTriangle className="h-3.5 w-3.5" />
               Budget exceeded
             </span>
           )}
           {query.data && !query.data.exceeded && (query.data.budget_usd !== null || query.data.budget_tokens !== null) && (
-            <span className="flex items-center gap-1 text-xs text-emerald-400">
+            <span className="flex items-center gap-1 text-xs text-[var(--ok)]">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Within limits
             </span>
           )}
           <button
             onClick={onClose}
-            className="rounded p-0.5 hover:bg-[var(--accent)] transition-colors"
+            className="rounded p-0.5 hover:bg-[var(--surface-strong)] transition-colors"
             title="Close"
           >
-            <X className="h-4 w-4 text-[var(--muted)]" />
+            <X className="h-4 w-4 text-[var(--ink-tertiary)]" />
           </button>
         </div>
       </div>
 
       {/* Body */}
+      {alertState === "exceeded" && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            <span className="font-medium">Budget exceeded.</span> This token has spent past its
+            limit — raise the limits below or wait for the window to reset.
+          </p>
+        </div>
+      )}
+      {alertState === "warning" && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-[var(--warn)]/30 bg-[var(--warn-soft)] p-3 text-xs text-[var(--warn)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>
+            <span className="font-medium">Approaching limit — {worstPct}% used.</span> Consider
+            raising the budget before requests start failing.
+          </p>
+        </div>
+      )}
       {query.isLoading && (
-        <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+        <div className="flex items-center gap-2 text-xs text-[var(--ink-tertiary)]">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Loading budget…
         </div>
       )}
       {query.isError && (
-        <p className="text-xs text-red-400">
+        <p className="text-xs text-[var(--danger)]">
           Failed to load budget: {(query.error as Error).message}
         </p>
       )}

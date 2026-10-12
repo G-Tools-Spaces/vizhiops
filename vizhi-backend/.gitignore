@@ -10,6 +10,7 @@ env/
 
 # Database files
 *.db
+*.db.bak
 *.sqlite3
 
 # Optional: VSCode settings
@@ -17,3 +18,5 @@ env/
 
 # Optional: environment variables
 .env
+*.db-shm
+*.db-wal

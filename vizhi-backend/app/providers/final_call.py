@@ -50,6 +50,7 @@ _PROVIDER_ENDPOINTS: dict[str, str] = {
     "local":       "",    # resolved from settings.ollama_base_url at runtime
     "ollama":      "",
     "huggingface": "",    # resolved from settings.huggingface_base_url at runtime
+    "nvidia":      "",    # resolved from settings.nvidia_base_url at runtime
     "custom":      "",    # resolved from settings.custom_inference_base_url at runtime
 }
 
@@ -236,6 +237,18 @@ async def _dispatch_call(
             provider_name="huggingface",
         )
 
+    if backend == "nvidia":
+        _check_key("NVIDIA", settings.nvidia_api_key)
+        base = (settings.nvidia_base_url or "https://integrate.api.nvidia.com/v1").rstrip("/").removesuffix("/v1")
+        return await _openai_compat_call(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(settings.nvidia_api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=False),
+            backend_name="nvidia",
+            model=model,
+            provider_name="nvidia",
+        )
+
     if backend in ("local", "ollama", "vllm", "tgi"):
         local_base = (kwargs.get("base_url") or settings.ollama_base_url or "http://localhost:11434").rstrip("/")
         return await _openai_compat_call(
@@ -255,6 +268,25 @@ async def _dispatch_call(
             headers=_bearer_headers(settings.custom_inference_api_key),
             payload=_build_payload(model, messages, temperature, max_tokens, stream=False),
             backend_name="custom",
+            model=model,
+            provider_name=provider_name,
+        )
+
+    if backend == "dynamic":
+        # Admin-managed provider: both credentials come from the catalog DB
+        # (passed in kwargs by DynamicProvider) — nothing lives in .env.
+        api_key = kwargs.get("api_key") or ""
+        base = (kwargs.get("base_url") or "").rstrip("/")
+        if not api_key or not base:
+            raise RuntimeError(
+                f"Provider '{provider_name}' has no API key / base URL "
+                "configured. Set them in the admin console."
+            )
+        return await _openai_compat_call(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=False),
+            backend_name=provider_name,
             model=model,
             provider_name=provider_name,
         )
@@ -334,6 +366,19 @@ async def _dispatch_stream(
             yield chunk
         return
 
+    if backend == "nvidia":
+        _check_key("NVIDIA", settings.nvidia_api_key)
+        base = (settings.nvidia_base_url or "https://integrate.api.nvidia.com/v1").rstrip("/").removesuffix("/v1")
+        async for chunk in _openai_compat_stream_gen(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(settings.nvidia_api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
+            backend_name="nvidia",
+            model=model,
+        ):
+            yield chunk
+        return
+
     if backend in ("local", "ollama", "vllm", "tgi"):
         local_base = (kwargs.get("base_url") or settings.ollama_base_url or "http://localhost:11434").rstrip("/")
         async for chunk in _openai_compat_stream_gen(
@@ -354,6 +399,24 @@ async def _dispatch_stream(
             headers=_bearer_headers(settings.custom_inference_api_key),
             payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
             backend_name="custom",
+            model=model,
+        ):
+            yield chunk
+        return
+
+    if backend == "dynamic":
+        api_key = kwargs.get("api_key") or ""
+        base = (kwargs.get("base_url") or "").rstrip("/")
+        if not api_key or not base:
+            raise RuntimeError(
+                f"Provider '{provider_name}' has no API key / base URL "
+                "configured. Set them in the admin console."
+            )
+        async for chunk in _openai_compat_stream_gen(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
+            backend_name=provider_name,
             model=model,
         ):
             yield chunk
@@ -387,6 +450,11 @@ def _build_payload(
     }
     if max_tokens is not None:
         p["max_tokens"] = max_tokens
+    if stream:
+        # Ask OpenAI-compatible providers to include token usage in the final
+        # stream chunk. Without this, streaming responses log 0 tokens / $0
+        # cost and budget enforcement never accumulates spend.
+        p["stream_options"] = {"include_usage": True}
     return p
 
 
@@ -657,6 +725,8 @@ async def _anthropic_stream_gen(
 
         response_model = model
         chunk_index = 0
+        usage_input_tokens = 0
+        usage_output_tokens = 0
 
         async for raw_line in resp.aiter_lines():
             line = raw_line.strip()
@@ -675,10 +745,12 @@ async def _anthropic_stream_gen(
 
             event_type = event.get("type", "")
 
-            # message_start carries model info
+            # message_start carries model info + input token usage
             if event_type == "message_start":
                 msg = event.get("message", {})
                 response_model = msg.get("model", model)
+                msg_usage = msg.get("usage") or {}
+                usage_input_tokens = int(msg_usage.get("input_tokens", 0) or 0)
 
             # content_block_delta carries the actual token
             elif event_type == "content_block_delta":
@@ -700,10 +772,14 @@ async def _anthropic_stream_gen(
                     yield f"data: {_json.dumps(openai_chunk)}"
                     chunk_index += 1
 
-            # message_delta carries finish_reason
+            # message_delta carries finish_reason + output token usage
             elif event_type == "message_delta":
                 delta = event.get("delta", {})
                 stop_reason = delta.get("stop_reason")
+                event_usage = event.get("usage") or {}
+                usage_output_tokens = int(
+                    event_usage.get("output_tokens", 0) or usage_output_tokens
+                )
                 if stop_reason:
                     finish_chunk = {
                         "id": f"anth_{chunk_index}",
@@ -716,6 +792,13 @@ async def _anthropic_stream_gen(
                                 "finish_reason": stop_reason,
                             }
                         ],
+                        # Emit usage so the gateway can track spend for
+                        # budget enforcement on streamed Anthropic calls.
+                        "usage": {
+                            "prompt_tokens": usage_input_tokens,
+                            "completion_tokens": usage_output_tokens,
+                            "total_tokens": usage_input_tokens + usage_output_tokens,
+                        },
                     }
                     yield f"data: {_json.dumps(finish_chunk)}"
                     chunk_index += 1
@@ -743,12 +826,14 @@ def _provider_to_backend(provider_name: str) -> str:
         "tgi":         "local",
         "huggingface": "huggingface",
         "hf":          "huggingface",
+        "nvidia":      "nvidia",
     }
     backend = mapping.get(provider_name.lower())
     if backend:
         return backend
-    # Unknown provider — fall back to whichever key is configured
-    return _auto_detect_backend()
+    # Unknown provider — serve it with admin-managed credentials from the
+    # catalog DB (DynamicProvider passes api_key/base_url via kwargs).
+    return "dynamic"
 
 
 def _auto_detect_backend() -> str:
@@ -763,6 +848,8 @@ def _auto_detect_backend() -> str:
         return "qwen"
     if settings.huggingface_api_key or settings.hf_token:
         return "huggingface"
+    if settings.nvidia_api_key:
+        return "nvidia"
     if settings.custom_inference_base_url:
         return "custom"
     return "huggingface"  # last resort

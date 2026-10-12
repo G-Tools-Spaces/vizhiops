@@ -23,6 +23,8 @@ class UserRow(Base):
     email_verified: Mapped[int] = mapped_column(Integer, default=0)
     name: Mapped[str] = mapped_column(Text, default="")
     avatar_url: Mapped[str] = mapped_column(Text, default="")
+    # "user" (default) or "admin" — admins can manage the model catalog
+    role: Mapped[str] = mapped_column(Text, default="user")
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
@@ -171,6 +173,54 @@ class ResponseRow(Base):
     estimated_cost: Mapped[float] = mapped_column(Float, default=0.0)
     timestamp: Mapped[_dt.datetime] = mapped_column(
         DateTime, server_default=func.now()
+    )
+
+
+# ── Model Catalog (DB-backed, managed via the admin console) ─────────────
+
+
+class CatalogProviderRow(Base):
+    __tablename__ = "catalog_providers"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)  # e.g. "openai"
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[int] = mapped_column(Integer, default=1)
+    # Admin-managed credentials ("bring your own provider"). When both are
+    # set, the router serves this provider with these credentials — no .env
+    # key or code change required.
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+    updated_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CatalogModelRow(Base):
+    __tablename__ = "catalog_models"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)  # e.g. "openai/gpt-4o"
+    provider_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("catalog_providers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    enabled: Mapped[int] = mapped_column(Integer, default=1)
+    # Optional per-model pricing (USD per 1K tokens). When set, cost
+    # estimation uses these instead of the provider's blended rates —
+    # editable per model in the admin console.
+    input_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+    updated_at: Mapped[_dt.datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
     )
 
 
