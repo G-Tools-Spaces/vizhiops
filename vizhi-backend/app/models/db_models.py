@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -103,6 +103,9 @@ class AgentRuntimeRow(Base):
 
 class ModelConnectionRow(Base):
     __tablename__ = "model_connections"
+    # Usage/stats update after each reply looks a token up by model name
+    # (Alembic revision 0002_hot_path_indexes).
+    __table_args__ = (Index("ix_model_connections_model_status", "model_name", "status"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     user_id: Mapped[str | None] = mapped_column(
@@ -133,6 +136,8 @@ class ModelConnectionRow(Base):
 
 class QueryRow(Base):
     __tablename__ = "queries"
+    # Budget check: spend per token since budget_reset_at.
+    __table_args__ = (Index("ix_queries_agent_ts", "agent_id", "timestamp"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     user_id: Mapped[str | None] = mapped_column(
@@ -154,6 +159,8 @@ class QueryRow(Base):
 
 class ResponseRow(Base):
     __tablename__ = "responses"
+    # Budget join and the agent-queue poll both look responses up by query.
+    __table_args__ = (Index("ix_responses_query_id", "query_id"),)
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     query_id: Mapped[str] = mapped_column(Text, nullable=False)

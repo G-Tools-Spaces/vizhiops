@@ -1,6 +1,31 @@
 # vizhi-backend
 backend-vizhi
 
+## Database
+
+One PostgreSQL database (Supabase or Neon), for development and production
+alike; there is no local SQLite. Set `DATABASE_URL` to the connection string
+exactly as the provider's console shows it (`postgresql://...?sslmode=require`
+is fine; libpq-only parameters are translated for asyncpg). On Supabase use the
+session pooler, port 5432.
+
+The schema is managed by Alembic. The server never creates tables, so run the
+migrations before starting it, locally and as the Render pre-deploy/build
+step:
+
+```bash
+alembic upgrade head
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
+
+`migrations/versions/0001_baseline_schema.py` and `0003_model_catalog.py`
+converge an existing database (they add only what is missing) as well as
+creating a fresh one, so they are safe on a database that create_all() used to
+manage. Promote an admin for the model catalog with
+`.venv/bin/python make_admin.py you@example.com`. Tests run
+against a throwaway PostgreSQL via `TEST_DATABASE_URL` and are skipped
+without it.
+
 ## Inference routing
 
 All logical providers call `app/providers/final_call.py`. Configure the real
@@ -34,34 +59,6 @@ backend model id:
 ```env
 INFERENCE_MODEL_MAP={"qwen/qwen-plus":"Qwen/Qwen2.5-7B-Instruct:fastest"}
 ```
-
-## Database & migrations (Alembic)
-
-The schema is managed by **Alembic**. On startup the backend runs
-`alembic upgrade head` against `DATABASE_URL`, so Supabase and local SQLite
-always converge on the same schema automatically.
-
-```env
-# Supabase (session pooler — SSL is handled automatically)
-DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
-
-# Local SQLite fallback
-# DATABASE_URL=sqlite+aiosqlite:///./vizhi.db
-```
-
-Making a schema change:
-
-```bash
-cd vizhi-backend
-.venv/bin/alembic revision --autogenerate -m "describe the change"
-.venv/bin/alembic upgrade head        # apply now (also applied on next startup)
-```
-
-Useful commands: `alembic current` (applied revision), `alembic history`
-(all revisions), `alembic downgrade -1` (roll back one).
-
-> Databases created before Alembic are adopted automatically: on first startup
-> they are stamped at head, then migrated normally.
 
 ## Smoke testing
 

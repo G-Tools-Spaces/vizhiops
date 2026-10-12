@@ -126,10 +126,13 @@ async def chat_completions(
     # ── Pre-flight budget check ─────────────────────────────────────────
     # Raises HTTP 429 immediately if the caller has exceeded their spending limit.
     # Budget checks are skipped when no limit is configured (None → unlimited).
+    # Auth already loaded the token row; hand it over instead of re-reading it.
     if credential.token_type == "agent":
-        await check_agent_budget(db, agent_id=credential.principal_id)
+        await check_agent_budget(db, agent_id=credential.principal_id, agent_row=credential.row)
     else:
-        await check_model_budget(db, model_connection_id=credential.principal_id)
+        await check_model_budget(
+            db, model_connection_id=credential.principal_id, model_connection_row=credential.row
+        )
 
     # ── Agent token path: queue job to on-site agent ────────────────────
     if credential.token_type == "agent":
@@ -412,6 +415,10 @@ async def chat_completions(
         sdk_type=body.call_sdk,
         messages=messages_raw,
     )
+    # Commit now, as the stream path does: otherwise the token row's
+    # last_used_at update holds a row lock and a pool connection for the whole
+    # provider call, and concurrent calls on the same token wait on each other.
+    await db.commit()
 
     try:
         # chat_with_fallback() automatically retries on the primary provider
@@ -469,16 +476,16 @@ async def chat_completions(
             detail=f"All providers failed: {exc}",
         )
 
-    await persist_response(
-        db,
-        query_id=query_row.id,
-        provider_response=result,
-        status_code=200,
-        model_connection_id=(
-            credential.principal_id
-            if credential.token_type == "model"
-            else None
-        ),
+    # The log row and usage stats are written after the reply is on its way,
+    # on a session of their own; the caller does not wait on those writes.
+    _spawn(
+        _persist_response_async(
+            query_id=query_row.id,
+            provider_response=result,
+            model_connection_id=(
+                credential.principal_id if credential.token_type == "model" else None
+            ),
+        )
     )
 
     return ChatCompletionResponse(
@@ -507,6 +514,36 @@ async def chat_completions(
             original_provider=provider_name if fallback_result.used_fallback else None,
         ),
     )
+
+
+# Background writes must be referenced until they finish, or the event loop
+# may garbage-collect them mid-flight.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+async def _persist_response_async(
+    *, query_id: str, provider_response, model_connection_id: str | None
+) -> None:
+    """Write the response row and token usage stats off the request path."""
+    try:
+        async with async_session_factory() as db:
+            await persist_response(
+                db,
+                query_id=query_id,
+                provider_response=provider_response,
+                status_code=200,
+                model_connection_id=model_connection_id,
+            )
+            await db.commit()
+    except Exception as exc:
+        logger.error("Failed to persist response for query %s: %s", query_id, exc)
 
 
 async def _persist_agent_job_async(

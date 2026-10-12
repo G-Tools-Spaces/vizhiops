@@ -18,3 +18,5 @@ env/
 
 # Optional: environment variables
 .env
+*.db-shm
+*.db-wal

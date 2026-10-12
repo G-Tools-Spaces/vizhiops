@@ -4,12 +4,11 @@ Every ``DateTime`` column in :mod:`app.models.db_models` is declared without
 ``timezone=True``, which maps to ``TIMESTAMP WITHOUT TIME ZONE`` on PostgreSQL.
 asyncpg refuses to bind a timezone-aware ``datetime`` to that type and fails the
 whole statement with ``DataError: can't subtract offset-naive and offset-aware
-datetimes``. SQLite is more forgiving — it silently drops the offset — which is
-why aware values went unnoticed until the Supabase switch.
+datetimes``.
 
 So every datetime handed to the ORM, whether as a column value or as a query
-parameter, must be naive. The convention is naive UTC, which is what the SQLite
-rows already contain.
+parameter, must be naive. The convention is naive UTC, which is what the stored
+rows contain.
 """
 
 from __future__ import annotations

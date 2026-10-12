@@ -77,30 +77,30 @@ class TestIsRetryable:
 # ── resolve_with_fallbacks ──────────────────────────────────────────────
 
 class TestResolveWithFallbacks:
-    def test_primary_first(self):
+    async def test_primary_first(self):
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         assert candidates[0][2] == "openai"
 
-    def test_fallback_providers_included(self):
+    async def test_fallback_providers_included(self):
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         provider_names = [c[2] for c in candidates]
         # Must include at least one fallback provider
         assert len(provider_names) > 1
 
-    def test_fallback_chain_matches_config(self):
+    async def test_fallback_chain_matches_config(self):
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         expected_fallbacks = [p for p, _ in _FALLBACK_CHAIN["openai"]]
         returned_fallbacks = [c[2] for c in candidates[1:]]
         # Returned fallbacks must be a subset of the configured chain
         for prov in returned_fallbacks:
             assert prov in expected_fallbacks
 
-    def test_model_prefix_resolution(self):
+    async def test_model_prefix_resolution(self):
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("claude-3-opus-20240229")
+        candidates = await router.resolve_with_fallbacks("claude-3-opus-20240229")
         assert candidates[0][2] == "anthropic"
 
 
@@ -112,8 +112,9 @@ class TestChatWithFallbackHappyPath:
         router = _make_router()
         ok = _ok_response("openai")
 
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         with patch.object(
-            router.resolve_with_fallbacks("openai/gpt-4o-mini")[0][0],
+            candidates[0][0],
             "chat_completion",
             new=AsyncMock(return_value=ok),
         ):
@@ -137,7 +138,7 @@ class TestChatWithFallbackTriggered:
     async def test_falls_back_on_503(self):
         """Primary provider raises 503 → fallback provider succeeds."""
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         primary = candidates[0][0]
         fallback = candidates[1][0]
         fallback_name = candidates[1][2]
@@ -164,7 +165,7 @@ class TestChatWithFallbackTriggered:
     async def test_non_retryable_skips_retry_immediately(self):
         """A non-retryable error (e.g., 401) skips to next provider without retry."""
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         primary = candidates[0][0]
         fallback = candidates[1][0]
 
@@ -194,7 +195,7 @@ class TestChatWithFallbackTriggered:
     async def test_retryable_retries_before_fallback(self):
         """A retryable error (rate limit) retries the same provider first."""
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
         primary = candidates[0][0]
         fallback = candidates[1][0]
 
@@ -226,7 +227,7 @@ class TestChatWithFallbackAllFail:
     @pytest.mark.asyncio
     async def test_raises_when_all_providers_fail(self):
         router = _make_router()
-        candidates = router.resolve_with_fallbacks("openai/gpt-4o-mini")
+        candidates = await router.resolve_with_fallbacks("openai/gpt-4o-mini")
 
         for provider, _, _ in candidates:
             provider.chat_completion = AsyncMock(
