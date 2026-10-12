@@ -4,25 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db, modelDict, type CatalogModelRow } from "@/lib/server/db";
+import { execute, loadModel, modelDict } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
 
 type Params = { params: Promise<{ id: string }> };
 
-function loadModel(id: string): CatalogModelRow | null {
-  return (
-    (db()
-      .prepare("SELECT * FROM catalog_models WHERE id = ?")
-      .get(id) as CatalogModelRow | undefined) ?? null
-  );
-}
-
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const id = decodeURIComponent((await params).id);
 
-  const row = loadModel(id);
+  const row = await loadModel(id);
   if (!row) {
     return NextResponse.json({ detail: "Model not found" }, { status: 404 });
   }
@@ -54,25 +46,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         : Number(body.output_price)
       : row.output_price;
 
-  db()
-    .prepare(
-      "UPDATE catalog_models SET label = ?, sort_order = ?, enabled = ?, input_price = ?, output_price = ? WHERE id = ?",
-    )
-    .run(label, sortOrder, enabled, inputPrice, outputPrice, id);
+  await execute(
+    "UPDATE catalog_models SET label = $1, sort_order = $2, enabled = $3, input_price = $4, output_price = $5, updated_at = NOW() WHERE id = $6",
+    [label, sortOrder, enabled, inputPrice, outputPrice, id],
+  );
 
-  return NextResponse.json(modelDict(loadModel(id)!));
+  return NextResponse.json(modelDict((await loadModel(id))!));
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const id = decodeURIComponent((await params).id);
 
-  const row = loadModel(id);
+  const row = await loadModel(id);
   if (!row) {
     return NextResponse.json({ detail: "Model not found" }, { status: 404 });
   }
 
-  db().prepare("DELETE FROM catalog_models WHERE id = ?").run(id);
+  await execute("DELETE FROM catalog_models WHERE id = $1", [id]);
   return new NextResponse(null, { status: 204 });
 }

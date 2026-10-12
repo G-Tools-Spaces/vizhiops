@@ -5,37 +5,22 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  db,
+  execute,
+  loadModels,
+  loadProvider,
   providerDict,
-  type CatalogModelRow,
-  type CatalogProviderRow,
+  withTransaction,
 } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
 
 type Params = { params: Promise<{ id: string }> };
 
-function loadProvider(id: string): CatalogProviderRow | null {
-  return (
-    (db()
-      .prepare("SELECT * FROM catalog_providers WHERE id = ?")
-      .get(id) as CatalogProviderRow | undefined) ?? null
-  );
-}
-
-function loadModels(providerId: string): CatalogModelRow[] {
-  return db()
-    .prepare(
-      "SELECT * FROM catalog_models WHERE provider_id = ? ORDER BY sort_order, id",
-    )
-    .all(providerId) as CatalogModelRow[];
-}
-
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
-  const row = loadProvider(id);
+  const row = await loadProvider(id);
   if (!row) {
     return NextResponse.json({ detail: "Provider not found" }, { status: 404 });
   }
@@ -47,7 +32,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ detail: "Invalid JSON body" }, { status: 400 });
   }
 
-  const conn = db();
   const label = body.label !== undefined ? String(body.label).trim() : row.label;
   const sortOrder =
     body.sort_order !== undefined ? Number(body.sort_order) || 0 : row.sort_order;
@@ -64,27 +48,30 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ? String(body.base_url).trim().replace(/\/+$/, "") || null
       : row.base_url;
 
-  conn
-    .prepare(
-      "UPDATE catalog_providers SET label = ?, sort_order = ?, enabled = ?, api_key = ?, base_url = ? WHERE id = ?",
-    )
-    .run(label, sortOrder, enabled, apiKey, baseUrl, id);
+  await execute(
+    "UPDATE catalog_providers SET label = $1, sort_order = $2, enabled = $3, api_key = $4, base_url = $5, updated_at = NOW() WHERE id = $6",
+    [label, sortOrder, enabled, apiKey, baseUrl, id],
+  );
 
-  return NextResponse.json(providerDict(loadProvider(id)!, loadModels(id)));
+  const [updated, models] = await Promise.all([loadProvider(id), loadModels(id)]);
+  return NextResponse.json(providerDict(updated!, models));
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
-  const row = loadProvider(id);
+  const row = await loadProvider(id);
   if (!row) {
     return NextResponse.json({ detail: "Provider not found" }, { status: 404 });
   }
 
-  const conn = db();
-  conn.prepare("DELETE FROM catalog_models WHERE provider_id = ?").run(id);
-  conn.prepare("DELETE FROM catalog_providers WHERE id = ?").run(id);
+  // The FK cascades, but deleting the models explicitly keeps the intent
+  // visible and the two statements commit together.
+  await withTransaction(async (client) => {
+    await client.query("DELETE FROM catalog_models WHERE provider_id = $1", [id]);
+    await client.query("DELETE FROM catalog_providers WHERE id = $1", [id]);
+  });
   return new NextResponse(null, { status: 204 });
 }

@@ -1,19 +1,20 @@
 /** POST /api/catalog/providers/:id/models — add a model to a provider. */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db, modelDict, type CatalogModelRow } from "@/lib/server/db";
+import { execute, loadModel, modelDict, queryOne } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const providerId = decodeURIComponent((await params).id);
 
-  const provider = db()
-    .prepare("SELECT id FROM catalog_providers WHERE id = ?")
-    .get(providerId);
+  const provider = await queryOne<{ id: string }>(
+    "SELECT id FROM catalog_providers WHERE id = $1",
+    [providerId],
+  );
   if (!provider) {
     return NextResponse.json({ detail: "Provider not found" }, { status: 404 });
   }
@@ -41,22 +42,19 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ detail: "Label is required" }, { status: 422 });
   }
 
-  const conn = db();
-  const existing = conn
-    .prepare("SELECT id FROM catalog_models WHERE id = ?")
-    .get(id);
+  const existing = await queryOne<{ id: string }>(
+    "SELECT id FROM catalog_models WHERE id = $1",
+    [id],
+  );
   if (existing) {
     return NextResponse.json({ detail: "Model id already exists" }, { status: 409 });
   }
 
-  conn
-    .prepare(
-      "INSERT INTO catalog_models (id, provider_id, label, sort_order, enabled) VALUES (?, ?, ?, ?, ?)",
-    )
-    .run(id, providerId, label, sortOrder, 1);
+  await execute(
+    "INSERT INTO catalog_models (id, provider_id, label, sort_order, enabled) VALUES ($1, $2, $3, $4, 1)",
+    [id, providerId, label, sortOrder],
+  );
 
-  const row = conn
-    .prepare("SELECT * FROM catalog_models WHERE id = ?")
-    .get(id) as CatalogModelRow;
+  const row = (await loadModel(id))!;
   return NextResponse.json(modelDict(row), { status: 201 });
 }
