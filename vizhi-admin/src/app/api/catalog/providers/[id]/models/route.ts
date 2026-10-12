@@ -26,15 +26,18 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ detail: "Invalid JSON body" }, { status: 400 });
   }
 
-  const id = String(body.id ?? "").trim();
+  const rawId = String(body.id ?? "").trim().replace(/^\/+/, "");
   const label = String(body.label ?? "").trim();
   const sortOrder = Number(body.sort_order ?? 0) || 0;
 
-  if (!id.startsWith(`${providerId}/`)) {
+  // The stored id is "<provider>/<upstream model id>": the gateway routes on
+  // the prefix and sends the remainder upstream. Admins usually paste the
+  // provider's own id (e.g. "Qwen/Qwen3-235B-A22B-Instruct-2507"), so add
+  // the prefix when it is missing instead of rejecting the request.
+  const id = rawId.startsWith(`${providerId}/`) ? rawId : `${providerId}/${rawId}`;
+  if (id === `${providerId}/`) {
     return NextResponse.json(
-      {
-        detail: `Model id must start with '${providerId}/' (e.g. '${providerId}/my-model')`,
-      },
+      { detail: `Enter the model id as the provider names it (e.g. 'my-model' or '${providerId}/my-model')` },
       { status: 422 },
     );
   }

@@ -81,7 +81,7 @@ export default function ProviderDetailPage() {
         sort_order: Number(newOrder) || 0,
       }),
     onSuccess: (model) => {
-      toast.success(`Model "${model.label}" added — live in the console now`);
+      toast.success(`Model "${model.label}" added as ${model.id} — live in the console now`);
       setNewModelId("");
       setNewLabel("");
       setNewOrder("0");
@@ -270,7 +270,7 @@ export default function ProviderDetailPage() {
               className="w-72 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
             <p className="text-xs text-[var(--ink-tertiary)]">
-              Must start with <code>{providerId}/</code>
+              The provider&apos;s model id; <code>{providerId}/</code> is added if missing
             </p>
           </div>
           <div className="space-y-1">

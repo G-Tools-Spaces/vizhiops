@@ -276,7 +276,9 @@ async def _dispatch_call(
         # Admin-managed provider: both credentials come from the catalog DB
         # (passed in kwargs by DynamicProvider) — nothing lives in .env.
         api_key = kwargs.get("api_key") or ""
-        base = (kwargs.get("base_url") or "").rstrip("/")
+        # Admins may enter the base URL with or without the /v1 suffix (the
+        # admin console and health checks accept both); the path adds it.
+        base = (kwargs.get("base_url") or "").rstrip("/").removesuffix("/v1")
         if not api_key or not base:
             raise RuntimeError(
                 f"Provider '{provider_name}' has no API key / base URL "
@@ -406,7 +408,9 @@ async def _dispatch_stream(
 
     if backend == "dynamic":
         api_key = kwargs.get("api_key") or ""
-        base = (kwargs.get("base_url") or "").rstrip("/")
+        # Admins may enter the base URL with or without the /v1 suffix (the
+        # admin console and health checks accept both); the path adds it.
+        base = (kwargs.get("base_url") or "").rstrip("/").removesuffix("/v1")
         if not api_key or not base:
             raise RuntimeError(
                 f"Provider '{provider_name}' has no API key / base URL "
