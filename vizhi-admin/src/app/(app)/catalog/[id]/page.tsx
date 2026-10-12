@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type CatalogModel } from "@/lib/api";
 
@@ -21,6 +21,52 @@ export default function ProviderDetailPage() {
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["admin-catalog"] });
+
+  // ── Credentials state (rotate / clear) ───────────────────────────────
+  const [credApiKey, setCredApiKey] = useState("");
+  const [credBaseUrl, setCredBaseUrl] = useState("");
+
+  const syncProvider = useMutation({
+    mutationFn: () => api.syncProvider(providerId),
+    onSuccess: (result) => {
+      if (result.source !== "live") {
+        toast.error(
+          `Sync failed (${result.source}) — check the provider's API key and base URL.`,
+        );
+      } else {
+        toast.success(
+          `Imported ${result.created} new model(s) — ${result.total} available from this provider`,
+        );
+      }
+      invalidate();
+    },
+    onError: (exc) => toast.error(exc.message),
+  });
+
+  const updateCredentials = useMutation({
+    mutationFn: () =>
+      api.updateProvider(providerId, {
+        ...(credApiKey.trim() ? { api_key: credApiKey.trim() } : {}),
+        ...(credBaseUrl.trim() ? { base_url: credBaseUrl.trim() } : {}),
+      }),
+    onSuccess: () => {
+      toast.success("Credentials saved — live on the next request");
+      setCredApiKey("");
+      invalidate();
+    },
+    onError: (exc) => toast.error(exc.message),
+  });
+
+  const clearCredentials = useMutation({
+    mutationFn: () => api.updateProvider(providerId, { api_key: "", base_url: "" }),
+    onSuccess: () => {
+      toast.success("Credentials cleared");
+      setCredApiKey("");
+      setCredBaseUrl("");
+      invalidate();
+    },
+    onError: (exc) => toast.error(exc.message),
+  });
 
   // ── Add model form state ─────────────────────────────────────────────
   const [newModelId, setNewModelId] = useState("");
@@ -48,10 +94,18 @@ export default function ProviderDetailPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editOrder, setEditOrder] = useState("0");
+  const [editInputPrice, setEditInputPrice] = useState("");
+  const [editOutputPrice, setEditOutputPrice] = useState("");
 
   const updateModel = useMutation({
-    mutationFn: (input: { id: string; label?: string; sort_order?: number; enabled?: boolean }) =>
-      api.updateModel(input.id, input),
+    mutationFn: (input: {
+      id: string;
+      label?: string;
+      sort_order?: number;
+      enabled?: boolean;
+      input_price?: number | null;
+      output_price?: number | null;
+    }) => api.updateModel(input.id, input),
     onSuccess: () => {
       toast.success("Model updated");
       setEditingId(null);
@@ -73,6 +127,8 @@ export default function ProviderDetailPage() {
     setEditingId(model.id);
     setEditLabel(model.label);
     setEditOrder(String(model.sort_order));
+    setEditInputPrice(model.input_price !== null ? String(model.input_price) : "");
+    setEditOutputPrice(model.output_price !== null ? String(model.output_price) : "");
   }
 
   if (providers.isPending) {
@@ -114,6 +170,85 @@ export default function ProviderDetailPage() {
           moment you save.
         </p>
       </div>
+
+      {/* ── Provider credentials ──────────────────────────────────────── */}
+      <section className="rounded-[var(--radius-xl)] border border-[var(--line)] bg-[var(--panel)] p-5">
+        <h2 className="text-sm font-semibold">Gateway credentials</h2>
+        <p className="mt-1 text-sm text-[var(--ink-secondary)]">
+          {provider.has_credentials
+            ? "This provider is served by the gateway with the key below."
+            : "Add an API key and base URL to make this provider callable through the gateway — no .env change needed."}
+        </p>
+
+        {provider.has_credentials ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface)] px-4 py-3">
+            <span className="rounded-full bg-[var(--ok-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ok)]">
+              Live
+            </span>
+            <code className="text-xs text-[var(--ink-secondary)]">
+              {provider.api_key_masked}
+            </code>
+            {provider.base_url ? (
+              <code className="text-xs text-[var(--ink-tertiary)]">{provider.base_url}</code>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => syncProvider.mutate()}
+              disabled={syncProvider.isPending}
+              className="ml-auto flex items-center gap-1.5 rounded-[10px] border border-[var(--line)] px-3 py-1.5 text-xs hover:bg-[var(--panel)] disabled:opacity-60"
+            >
+              <RefreshCcw className={`h-3.5 w-3.5 ${syncProvider.isPending ? "animate-spin" : ""}`} />
+              {syncProvider.isPending ? "Importing…" : "Import live models"}
+            </button>
+            <button
+              type="button"
+              onClick={() => clearCredentials.mutate()}
+              disabled={clearCredentials.isPending}
+              className="rounded-[10px] border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-60"
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+
+        <form
+          className="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            updateCredentials.mutate();
+          }}
+        >
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--ink-secondary)]">
+              API key {provider.has_credentials ? <span className="font-normal text-[var(--ink-tertiary)]">(leave blank to keep)</span> : null}
+            </label>
+            <input
+              value={credApiKey}
+              onChange={(e) => setCredApiKey(e.target.value)}
+              placeholder={provider.api_key_masked ?? "gsk_… / sk-…"}
+              type="password"
+              autoComplete="off"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--ink-secondary)]">Base URL</label>
+            <input
+              value={credBaseUrl}
+              onChange={(e) => setCredBaseUrl(e.target.value)}
+              placeholder={provider.base_url ?? "https://api.groq.com/openai/v1"}
+              className="w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={updateCredentials.isPending || (!credApiKey.trim() && !credBaseUrl.trim())}
+            className="rounded-[var(--radius-md)] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-[var(--brand-ink)] transition hover:bg-[var(--brand-hover)] disabled:opacity-60"
+          >
+            {provider.has_credentials ? "Update" : "Save credentials"}
+          </button>
+        </form>
+      </section>
 
       {/* ── Add model ────────────────────────────────────────────────── */}
       <section className="rounded-[var(--radius-xl)] border border-[var(--line)] bg-[var(--panel)] p-5">
@@ -176,6 +311,9 @@ export default function ProviderDetailPage() {
               <th className="px-4 py-3 font-medium">Model ID</th>
               <th className="px-4 py-3 font-medium">Label</th>
               <th className="px-4 py-3 font-medium">Order</th>
+              <th className="px-4 py-3 font-medium">
+                Price / 1K <span className="font-normal text-[var(--ink-tertiary)]">(in / out)</span>
+              </th>
               <th className="px-4 py-3 font-medium">Visible</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
@@ -183,7 +321,7 @@ export default function ProviderDetailPage() {
           <tbody>
             {provider.models.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[var(--ink-tertiary)]">
+                <td colSpan={6} className="px-4 py-8 text-center text-[var(--ink-tertiary)]">
                   No models yet — add the first one above.
                 </td>
               </tr>
@@ -216,6 +354,31 @@ export default function ProviderDetailPage() {
                       />
                     </td>
                     <td className="px-4 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={editInputPrice}
+                          onChange={(e) => setEditInputPrice(e.target.value)}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          placeholder="auto"
+                          title="USD per 1K input tokens (empty = provider rate)"
+                          className="w-24 rounded-[var(--radius-md)] border border-[var(--line)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                        />
+                        <span className="text-xs text-[var(--ink-tertiary)]">/</span>
+                        <input
+                          value={editOutputPrice}
+                          onChange={(e) => setEditOutputPrice(e.target.value)}
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          placeholder="auto"
+                          title="USD per 1K output tokens (empty = provider rate)"
+                          className="w-24 rounded-[var(--radius-md)] border border-[var(--line)] px-2 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                        />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2">
                       <Toggle
                         checked={model.enabled}
                         onChange={(enabled) =>
@@ -230,6 +393,8 @@ export default function ProviderDetailPage() {
                             id: model.id,
                             label: editLabel.trim(),
                             sort_order: Number(editOrder) || 0,
+                            input_price: editInputPrice.trim() === "" ? null : Number(editInputPrice),
+                            output_price: editOutputPrice.trim() === "" ? null : Number(editOutputPrice),
                           })
                         }
                         className="mr-2 rounded-[var(--radius-md)] bg-[var(--brand)] px-3 py-1.5 text-xs font-medium text-[var(--brand-ink)] hover:bg-[var(--brand-hover)]"
@@ -254,6 +419,15 @@ export default function ProviderDetailPage() {
                     <td className="px-4 py-3 font-medium">{model.label}</td>
                     <td className="px-4 py-3 text-[var(--ink-secondary)]">
                       {model.sort_order}
+                    </td>
+                    <td className="px-4 py-3">
+                      {model.input_price !== null && model.output_price !== null ? (
+                        <span className="font-mono text-xs text-[var(--ink)]">
+                          ${model.input_price} / ${model.output_price}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--ink-tertiary)]">auto</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Toggle

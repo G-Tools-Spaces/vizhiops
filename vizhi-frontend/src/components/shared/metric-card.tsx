@@ -1,6 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 
+/**
+ * KPI cell — mockup style: #0F0F11 card, 12px 600 label, 26px tabular-nums
+ * value, 12px tertiary hint. Cards sit on a 1px-gap grid whose background
+ * draws the separators (see the dashboard page's KPI grid wrapper).
+ */
 export function MetricCard({
   label,
   value,
@@ -13,17 +17,15 @@ export function MetricCard({
   icon: LucideIcon;
 }) {
   return (
-    <Card>
-      <CardContent className="flex min-h-24 items-start gap-3 p-4">
-        <span className="rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-[var(--ink-secondary)]">
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">{label}</p>
-          <p className="mt-1 text-xl font-semibold text-[var(--ink)]">{value}</p>
-          <p className="mt-0.5 text-xs text-[var(--ink-tertiary)]">{hint}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-1.5 bg-[var(--panel)] px-[18px] py-4">
+      <span className="flex items-center gap-2 text-xs font-semibold text-[var(--ink-secondary)]">
+        <Icon className="h-3.5 w-3.5 text-[var(--ink-tertiary)]" />
+        {label}
+      </span>
+      <span className="text-[26px] font-bold leading-none tracking-tight text-[var(--ink)] tabular-nums">
+        {value}
+      </span>
+      <span className="text-xs text-[var(--ink-tertiary)]">{hint}</span>
+    </div>
   );
 }

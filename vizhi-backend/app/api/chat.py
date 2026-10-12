@@ -60,7 +60,27 @@ def _extract_sse_text(payload: dict) -> str:
         delta = first.get("delta") or {}
         if isinstance(delta, dict) and delta.get("content") is not None:
             return str(delta.get("content") or "")
+        # Reasoning models (DeepSeek-R1 etc.) stream their chain-of-thought
+        # in `delta.reasoning_content` — it is NOT part of the answer, so it
+        # is deliberately excluded from the persisted/displayed content.
     return ""
+
+
+def _strip_reasoning(text: str) -> str:
+    """Remove a leading ```` block from a completed answer.
+
+    Some OpenAI-compatible backends (HF router serving DeepSeek-R1) merge
+    the model's chain-of-thought into `content` wrapped in <think> tags
+    instead of keeping it in `reasoning_content`. The gateway forwards the
+    raw stream to the client untouched, but the *persisted* answer (and the
+    SDK's assembled ChatAnswer) should contain only the real response.
+    """
+    if "</think>" not in text:
+        return text
+    # Keep everything after the closing tag; if a stray opening tag exists
+    # without a close, drop from the opening tag onward.
+    _, _, after = text.partition("</think>")
+    return after.lstrip()
 
 
 def _extract_sse_finish_reason(payload: dict) -> str | None:
@@ -115,7 +135,7 @@ async def chat_completions(
     if credential.token_type == "agent":
         # Resolve provider name for persisting the query (no actual call yet)
         try:
-            _tmp_provider, resolved_model = provider_router.resolve(model_name, body.call_sdk)
+            _tmp_provider, resolved_model = await provider_router.resolve(model_name, body.call_sdk)
             provider_name = _tmp_provider.provider_name
         except ValueError:
             provider_name = "agent"
@@ -180,7 +200,7 @@ async def chat_completions(
     if body.stream and credential.token_type != "agent":
         # Validate provider before opening the stream
         try:
-            _primary_provider, _primary_model = provider_router.resolve(model_name, body.call_sdk)
+            _primary_provider, _primary_model = await provider_router.resolve(model_name, body.call_sdk)
             provider_name = _primary_provider.provider_name
             resolved_model = _primary_model
         except ValueError as exc:
@@ -325,7 +345,7 @@ async def chat_completions(
                             provider_response=ProviderResponse(
                                 provider=final_provider_name,
                                 model=final_model_name,
-                                content="".join(chunks),
+                                content=_strip_reasoning("".join(chunks)),
                                 raw_response={
                                     "id": f"stream_{query_row.id}",
                                     "object": "chat.completion",
@@ -333,7 +353,7 @@ async def chat_completions(
                                     "choices": [
                                         {
                                             "index": 0,
-                                            "message": {"role": "assistant", "content": "".join(chunks)},
+                                            "message": {"role": "assistant", "content": _strip_reasoning("".join(chunks))},
                                             "finish_reason": "stop",
                                         }
                                     ],
@@ -376,7 +396,7 @@ async def chat_completions(
 
     # Validate model resolves before persisting the query
     try:
-        _primary_provider, _primary_model = provider_router.resolve(model_name, body.call_sdk)
+        _primary_provider, _primary_model = await provider_router.resolve(model_name, body.call_sdk)
         provider_name = _primary_provider.provider_name
         resolved_model = _primary_model
     except ValueError as exc:

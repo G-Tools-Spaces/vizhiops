@@ -271,6 +271,25 @@ async def _dispatch_call(
             provider_name=provider_name,
         )
 
+    if backend == "dynamic":
+        # Admin-managed provider: both credentials come from the catalog DB
+        # (passed in kwargs by DynamicProvider) — nothing lives in .env.
+        api_key = kwargs.get("api_key") or ""
+        base = (kwargs.get("base_url") or "").rstrip("/")
+        if not api_key or not base:
+            raise RuntimeError(
+                f"Provider '{provider_name}' has no API key / base URL "
+                "configured. Set them in the admin console."
+            )
+        return await _openai_compat_call(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=False),
+            backend_name=provider_name,
+            model=model,
+            provider_name=provider_name,
+        )
+
     raise RuntimeError(f"Unknown inference backend: '{backend}'")
 
 
@@ -379,6 +398,24 @@ async def _dispatch_stream(
             headers=_bearer_headers(settings.custom_inference_api_key),
             payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
             backend_name="custom",
+            model=model,
+        ):
+            yield chunk
+        return
+
+    if backend == "dynamic":
+        api_key = kwargs.get("api_key") or ""
+        base = (kwargs.get("base_url") or "").rstrip("/")
+        if not api_key or not base:
+            raise RuntimeError(
+                f"Provider '{provider_name}' has no API key / base URL "
+                "configured. Set them in the admin console."
+            )
+        async for chunk in _openai_compat_stream_gen(
+            url=f"{base}{_CHAT_COMPLETIONS_PATH}",
+            headers=_bearer_headers(api_key),
+            payload=_build_payload(model, messages, temperature, max_tokens, stream=True),
+            backend_name=provider_name,
             model=model,
         ):
             yield chunk
@@ -795,8 +832,9 @@ def _provider_to_backend(provider_name: str) -> str:
     backend = mapping.get(provider_name.lower())
     if backend:
         return backend
-    # Unknown provider — fall back to whichever key is configured
-    return _auto_detect_backend()
+    # Unknown provider — serve it with admin-managed credentials from the
+    # catalog DB (DynamicProvider passes api_key/base_url via kwargs).
+    return "dynamic"
 
 
 def _auto_detect_backend() -> str:

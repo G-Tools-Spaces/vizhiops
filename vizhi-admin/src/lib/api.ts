@@ -1,4 +1,6 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// vizhi-admin is self-contained: every call below hits this app's own
+// Next.js API routes (src/app/api/**), which read/write the shared Vizhi
+// database directly. No Python backend required.
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,8 @@ export type CatalogModel = {
   label: string;
   sort_order: number;
   enabled: boolean;
+  input_price: number | null;
+  output_price: number | null;
 };
 
 export type CatalogProvider = {
@@ -25,6 +29,9 @@ export type CatalogProvider = {
   sort_order: number;
   enabled: boolean;
   models: CatalogModel[];
+  has_credentials: boolean;
+  api_key_masked: string | null;
+  base_url: string | null;
 };
 
 export type ProviderCreateInput = {
@@ -32,12 +39,16 @@ export type ProviderCreateInput = {
   label: string;
   sort_order?: number;
   enabled?: boolean;
+  api_key?: string;
+  base_url?: string;
 };
 
 export type ProviderUpdateInput = {
   label?: string;
   sort_order?: number;
   enabled?: boolean;
+  api_key?: string;
+  base_url?: string;
 };
 
 export type ModelCreateInput = {
@@ -45,12 +56,16 @@ export type ModelCreateInput = {
   label: string;
   sort_order?: number;
   enabled?: boolean;
+  input_price?: number;
+  output_price?: number;
 };
 
 export type ModelUpdateInput = {
   label?: string;
   sort_order?: number;
   enabled?: boolean;
+  input_price?: number | null;
+  output_price?: number | null;
 };
 
 export class ApiError extends Error {
@@ -65,7 +80,7 @@ export class ApiError extends Error {
 // ── Request helper ───────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...options?.headers },
     credentials: "include",
     ...options,
@@ -96,58 +111,64 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // ── API surface ──────────────────────────────────────────────────────────
 
 export const api = {
-  // Auth (same session cookie as the main console)
+  // Auth — same session cookie as the main console (shared JWT secret)
   login: (input: { email: string; password: string }) =>
-    request<{ user: AuthUser }>("/v1/auth/login", {
+    request<{ user: AuthUser }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  me: () => request<AuthUser>("/v1/auth/me"),
-  logout: () => request<void>("/v1/auth/logout", { method: "POST" }),
+  me: () => request<AuthUser>("/api/auth/me"),
+  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
 
-  // Admin catalog
-  listProviders: () => request<CatalogProvider[]>("/v1/admin/catalog/providers"),
+  // Catalog providers
+  listProviders: () => request<CatalogProvider[]>("/api/catalog/providers"),
   createProvider: (input: ProviderCreateInput) =>
-    request<CatalogProvider>("/v1/admin/catalog/providers", {
+    request<CatalogProvider>("/api/catalog/providers", {
       method: "POST",
       body: JSON.stringify(input),
     }),
   updateProvider: (id: string, input: ProviderUpdateInput) =>
-    request<CatalogProvider>(`/v1/admin/catalog/providers/${encodeURIComponent(id)}`, {
+    request<CatalogProvider>(`/api/catalog/providers/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
   deleteProvider: (id: string) =>
-    request<void>(`/v1/admin/catalog/providers/${encodeURIComponent(id)}`, {
+    request<void>(`/api/catalog/providers/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
+  // Catalog models
   createModel: (providerId: string, input: ModelCreateInput) =>
     request<CatalogModel>(
-      `/v1/admin/catalog/providers/${encodeURIComponent(providerId)}/models`,
-      { method: "POST", body: JSON.stringify(input) }
+      `/api/catalog/providers/${encodeURIComponent(providerId)}/models`,
+      { method: "POST", body: JSON.stringify(input) },
     ),
   updateModel: (id: string, input: ModelUpdateInput) =>
-    request<CatalogModel>(`/v1/admin/catalog/models/${encodeURIComponent(id)}`, {
+    request<CatalogModel>(`/api/catalog/models/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
   deleteModel: (id: string) =>
-    request<void>(`/v1/admin/catalog/models/${encodeURIComponent(id)}`, {
+    request<void>(`/api/catalog/models/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
-  // NVIDIA NIM — fetch live models from build.nvidia.com into the catalog
+  // Live model sync
   syncNvidia: () =>
     request<{ source: string; created: number; total: number }>(
-      "/v1/admin/catalog/sync-nvidia",
-      { method: "POST" }
+      "/api/catalog/sync/nvidia",
+      { method: "POST" },
     ),
-
-  // HuggingFace — fetch live models from the HF router into the catalog
   syncHuggingface: () =>
     request<{ source: string; created: number; total: number }>(
-      "/v1/admin/catalog/sync-huggingface",
-      { method: "POST" }
+      "/api/catalog/sync/huggingface",
+      { method: "POST" },
+    ),
+  // Any DB-credentialed provider (nebius, groq, …) — synced with its
+  // stored key + base URL.
+  syncProvider: (providerId: string) =>
+    request<{ source: string; created: number; total: number }>(
+      `/api/catalog/sync/${encodeURIComponent(providerId)}`,
+      { method: "POST" },
     ),
 };

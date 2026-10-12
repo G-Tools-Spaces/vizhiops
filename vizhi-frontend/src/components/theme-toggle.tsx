@@ -17,7 +17,14 @@ export function ThemeToggle() {
     () => false,
   );
 
-  const isDark = resolvedTheme === "dark";
+  // next-themes resolves the theme only on the client (it reads the
+  // <html> class / localStorage), so `resolvedTheme` is undefined during
+  // SSR. Deriving the title/icon from it directly caused hydration
+  // mismatches — the server rendered "Switch to dark mode" while the
+  // client (already dark) rendered "Switch to light mode". Render a
+  // static placeholder until mounted; the real toggle appears after
+  // hydration with zero mismatch.
+  const isDark = mounted ? resolvedTheme === "dark" : false;
 
   return (
     <Button

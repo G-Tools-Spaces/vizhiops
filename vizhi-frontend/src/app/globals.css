@@ -1,39 +1,85 @@
 @import "tailwindcss";
 
 /*
- * Vizhi frontend design system — aligned with the new light, minimal admin UI.
+ * Vizhi frontend design system — Pingie-style dark UI.
+ * Values replicated from the design reference mockup:
+ *   canvas #0A0A0B · sidebar #0C0C0E · cards #0F0F11 · inputs #111113
+ *   active nav #17171B · hairlines #222226 / #2E2E34 / #1A1A1E
+ *   ink #FAFAFA / #A1A1AA / #8B8B94 · brand purple #7C3AED / #8B5CF6 / #A78BFA
+ *   ok #34D399 · warn #F59E0B · danger #FCA5A5
  */
 
 :root {
+  color-scheme: dark;
+
+  /* Surfaces — one-step differences, separated by hairlines not contrast. */
+  --canvas: #0a0a0b;
+  --panel: #0f0f11;
+  --surface: #111113;
+  --surface-strong: #17171b;
+
+  /* Text. */
+  --ink: #fafafa;
+  --ink-secondary: #a1a1aa;
+  --ink-tertiary: #8b8b94;
+
+  /* Hairlines. */
+  --line: #222226;
+  --line-soft: #1a1a1e;
+  --line-strong: #2e2e34;
+
+  /* Brand — filled purple for primary actions, lighter for text accents. */
+  --brand: #7c3aed;
+  --brand-hover: #8b5cf6;
+  --brand-ink: #ffffff;
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+
+  /* Status. */
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.12);
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.12);
+  --danger: #fca5a5;
+  --danger-soft: rgba(252, 165, 165, 0.12);
+  --info: #7cc7ff;
+  --info-soft: rgba(124, 199, 255, 0.12);
+
+  --muted: #8b8b94;
+  --muted-soft: #17171b;
+
+  /* Radii — small and uniform. */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* Light variant — same structure, lifted onto white. */
+.light {
   color-scheme: light;
 
-  /* Surfaces. `canvas` is the page, `panel` the cards/tables on it, `surface`
-     the quiet fills (table headers, hovers). One-step difference is deliberate:
-     regions are separated with a hairline, not with contrast. */
   --canvas: #fbfbfc;
   --panel: #ffffff;
   --surface: #f7f8fa;
   --surface-strong: #eef1f4;
 
-  /* Text. */
   --ink: #17191f;
   --ink-secondary: #5f6673;
   --ink-tertiary: #8c93a1;
 
-  /* Hairlines. Lighter than most — they separate without drawing boxes. */
   --line: #e5e8ee;
   --line-soft: #f1f3f6;
+  --line-strong: #d7dbe2;
 
-  /* Brand. `brand` is the filled iris of a primary button; `accent` is the
-     deeper iris that stays readable as text on white (links, active nav). */
-  --brand: #2bb673;
-  --brand-hover: #1fa264;
+  --brand: #7c3aed;
+  --brand-hover: #8b5cf6;
   --brand-ink: #ffffff;
-  --accent: #239764;
-  --accent-hover: #1d7f54;
-  --accent-soft: #eaf8f0;
+  --accent: #6d4fd8;
+  --accent-hover: #5b3fc4;
+  --accent-soft: #f1ecfd;
 
-  /* Status. */
   --ok: #178e57;
   --ok-soft: #eaf7f0;
   --warn: #8f6a1e;
@@ -45,47 +91,6 @@
 
   --muted: #5d6470;
   --muted-soft: #eef0f5;
-
-  /* Radii — small and uniform. */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-}
-
-.dark {
-  color-scheme: dark;
-
-  --canvas: #0c0e13;
-  --panel: #12151c;
-  --surface: #171b24;
-  --surface-strong: #1d222d;
-
-  --ink: #f3f5f8;
-  --ink-secondary: #9aa3b2;
-  --ink-tertiary: #6d7686;
-
-  --line: #232936;
-  --line-soft: #1a1f29;
-
-  --brand: #6f72f0;
-  --brand-hover: #8a8df5;
-  --brand-ink: #0a0a14;
-  --accent: #9b9df6;
-  --accent-hover: #b6b7fa;
-  --accent-soft: rgba(111, 114, 240, 0.14);
-
-  --ok: #4fd1a5;
-  --ok-soft: rgba(79, 209, 165, 0.12);
-  --warn: #f5c451;
-  --warn-soft: rgba(245, 196, 81, 0.12);
-  --danger: #ff6b6b;
-  --danger-soft: rgba(255, 107, 107, 0.12);
-  --info: #7cc7ff;
-  --info-soft: rgba(124, 199, 255, 0.12);
-
-  --muted: #9aa3b2;
-  --muted-soft: #1d222d;
 }
 
 * {
@@ -124,20 +129,25 @@ textarea {
   background: var(--accent-soft);
 }
 
-/* Focus ring: visible for keyboard users, iris to match the brand. */
+/* Focus ring: visible for keyboard users, brand purple. */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-hover);
   outline-offset: 1px;
 }
 
 /* Thin grey scrollbars inside panels. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 /* Charts inherit the muted ink in both themes. */
 .recharts-cartesian-axis-tick text,
 .recharts-legend-item-text {
   fill: var(--ink-tertiary) !important;
+}
+
+/* Tabular numerals for metric values — matches the mockup's KPI figures. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

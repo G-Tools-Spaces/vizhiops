@@ -127,7 +127,7 @@ export function DataTable({
   }
 
   const toolButton =
-    "flex h-8 items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--panel)] px-2.5 text-xs text-[var(--ink-secondary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]";
+    "flex h-8 items-center gap-1.5 border border-[var(--line-strong)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink-secondary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]";
 
   return (
     <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)]">
@@ -189,10 +189,10 @@ export function DataTable({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse text-sm">
-          <thead className="bg-[var(--surface)] text-left text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">
+          <thead className="bg-[var(--surface)] text-left text-xs font-semibold text-[var(--ink-secondary)]">
             <tr>
               {visibleIndexes.map((i) => (
-                <th key={headers[i]} className="px-4 py-2.5 font-medium">
+                <th key={headers[i]} className="border-b border-[var(--line)] px-4 py-2.5 font-semibold">
                   {headers[i]}
                 </th>
               ))}
@@ -214,7 +214,7 @@ export function DataTable({
                   <Fragment key={index}>
                     <tr className="transition-colors hover:bg-[var(--surface)]">
                       {visibleIndexes.map((cellIndex) => (
-                        <td key={cellIndex} className="px-4 py-3 align-middle text-[var(--ink-secondary)]">
+                        <td key={cellIndex} className="border-b border-[var(--line-soft)] px-4 py-3 align-middle text-[13px] text-[var(--ink-secondary)]">
                           {row[cellIndex]}
                         </td>
                       ))}

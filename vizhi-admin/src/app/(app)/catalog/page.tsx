@@ -28,6 +28,8 @@ export default function CatalogPage() {
   const [newId, setNewId] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newOrder, setNewOrder] = useState("0");
+  const [newApiKey, setNewApiKey] = useState("");
+  const [newBaseUrl, setNewBaseUrl] = useState("");
 
   const createProvider = useMutation({
     mutationFn: () =>
@@ -35,12 +37,20 @@ export default function CatalogPage() {
         id: newId.trim(),
         label: newLabel.trim(),
         sort_order: Number(newOrder) || 0,
+        ...(newApiKey.trim() ? { api_key: newApiKey.trim() } : {}),
+        ...(newBaseUrl.trim() ? { base_url: newBaseUrl.trim() } : {}),
       }),
     onSuccess: (provider) => {
-      toast.success(`Provider "${provider.label}" created`);
+      toast.success(
+        provider.has_credentials
+          ? `Provider "${provider.label}" created — live and callable now`
+          : `Provider "${provider.label}" created`,
+      );
       setNewId("");
       setNewLabel("");
       setNewOrder("0");
+      setNewApiKey("");
+      setNewBaseUrl("");
       invalidate();
     },
     onError: (exc) => toast.error(exc.message),
@@ -70,6 +80,30 @@ export default function CatalogPage() {
     },
     onError: (exc) => toast.error(exc.message),
   });
+
+  // Per-provider sync for admin-added (credentialed) providers — tracks
+  // which one is in flight so each button spins independently.
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const syncProvider = async (providerId: string) => {
+    setSyncingId(providerId);
+    try {
+      const result = await api.syncProvider(providerId);
+      if (result.source !== "live") {
+        toast.error(
+          `Sync failed (${result.source}) — check the provider's API key and base URL.`,
+        );
+      } else {
+        toast.success(
+          `Imported ${result.created} new model(s) — ${result.total} available from this provider`,
+        );
+      }
+      invalidate();
+    } catch (exc) {
+      toast.error(exc instanceof Error ? exc.message : "Sync failed");
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   const syncNvidia = useMutation({
     mutationFn: api.syncNvidia,
@@ -204,6 +238,7 @@ export default function CatalogPage() {
             </div>
 
             <div className="mt-5 grid gap-3">
+              {/* Env-keyed built-ins */}
               <button
                 type="button"
                 onClick={() => syncHuggingface.mutate()}
@@ -229,6 +264,32 @@ export default function CatalogPage() {
                 </span>
                 <RefreshCcw className={`h-4 w-4 text-[var(--ink-secondary)] ${syncNvidia.isPending ? "animate-spin" : ""}`} />
               </button>
+
+              {/* Admin-added providers with stored credentials — one sync
+                  button each, using their own key + base URL. */}
+              {(providers.data ?? [])
+                .filter((p) => p.has_credentials && p.id !== "huggingface" && p.id !== "nvidia")
+                .map((provider) => (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    onClick={() => syncProvider(provider.id)}
+                    disabled={syncingId === provider.id}
+                    className="flex items-center justify-between rounded-[14px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-left transition hover:bg-[var(--surface)] disabled:opacity-60"
+                  >
+                    <span>
+                      <span className="block text-sm font-medium text-[var(--ink)]">
+                        Sync {provider.label}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[var(--ink-tertiary)]">
+                        Import chat models from {provider.base_url}
+                      </span>
+                    </span>
+                    <RefreshCcw
+                      className={`h-4 w-4 text-[var(--ink-secondary)] ${syncingId === provider.id ? "animate-spin" : ""}`}
+                    />
+                  </button>
+                ))}
             </div>
         </section>
       </section>
@@ -282,6 +343,37 @@ export default function CatalogPage() {
                 className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
               />
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">
+                API key <span className="normal-case text-[var(--ink-tertiary)]">(optional — makes it callable)</span>
+              </label>
+              <input
+                value={newApiKey}
+                onChange={(e) => setNewApiKey(e.target.value)}
+                placeholder="gsk_… / sk-…"
+                type="password"
+                autoComplete="off"
+                className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">
+                Base URL <span className="normal-case text-[var(--ink-tertiary)]">(OpenAI-compatible)</span>
+              </label>
+              <input
+                value={newBaseUrl}
+                onChange={(e) => setNewBaseUrl(e.target.value)}
+                placeholder="https://api.groq.com/openai/v1"
+                className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+
+            <p className="text-xs text-[var(--ink-tertiary)]">
+              With an API key and base URL, the gateway serves this provider
+              immediately — no .env change or redeploy needed.
+            </p>
 
             <button
               type="submit"

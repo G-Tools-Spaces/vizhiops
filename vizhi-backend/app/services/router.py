@@ -207,13 +207,62 @@ _instances: dict[str, BaseProvider] = {}
 
 
 def _get_provider(name: str) -> BaseProvider:
-    """Return a cached provider instance."""
+    """Return a cached provider instance.
+
+    Unknown providers fall back to :class:`DynamicProvider`, which serves any
+    provider whose API key + base URL were set in the admin console (stored
+    in ``catalog_providers``). This is what makes admin-added providers
+    callable without code changes.
+    """
     if name not in _instances:
         cls = _PROVIDERS.get(name)
         if cls is None:
-            raise ValueError(f"Unknown provider: {name}")
-        _instances[name] = cls()
+            from app.providers.dynamic import DynamicProvider
+
+            _instances[name] = DynamicProvider(name)
+        else:
+            _instances[name] = cls()
     return _instances[name]
+
+
+# ── Admin-managed (catalog) provider resolution ─────────────────────────
+# Providers added via the admin console live in ``catalog_providers``. Their
+# ids are cached briefly so per-request resolution stays cheap; a brand-new
+# provider is picked up on its very first request (cache miss → DB check).
+
+_catalog_provider_ids: dict[str, float] = {}  # provider_id → expiry (monotonic)
+_CATALOG_CACHE_TTL_SECONDS = 30.0
+
+
+async def _is_catalog_provider(provider_id: str) -> bool:
+    """True when ``provider_id`` was added via the admin console."""
+    now = time.monotonic()
+    expiry = _catalog_provider_ids.get(provider_id)
+    if expiry is not None and expiry > now:
+        return True
+
+    from sqlalchemy import select
+
+    from app.db.session import async_session_factory
+    from app.models.db_models import CatalogProviderRow
+
+    try:
+        async with async_session_factory() as db:
+            row = (
+                await db.execute(
+                    select(CatalogProviderRow.id).where(
+                        CatalogProviderRow.id == provider_id
+                    )
+                )
+            ).scalar_one_or_none()
+    except Exception:
+        # DB unavailable — never block traffic to the known built-ins.
+        return False
+
+    if row is not None:
+        _catalog_provider_ids[provider_id] = now + _CATALOG_CACHE_TTL_SECONDS
+        return True
+    return False
 
 
 # ── Result dataclass returned by chat_with_fallback() ──────────────────
@@ -241,7 +290,7 @@ class ProviderRouter:
 
     # ── Single-provider resolution (original behaviour) ─────────────────
 
-    def resolve(
+    async def resolve(
         self,
         model: str,
         call_sdk: str | None = None,
@@ -254,10 +303,10 @@ class ProviderRouter:
         3. Model name prefix heuristic
         4. Raise ``ValueError``
         """
-        provider_name, model_name = self._resolve_name(model, call_sdk)
+        provider_name, model_name = await self._resolve_name(model, call_sdk)
         return _get_provider(provider_name), model_name
 
-    def _resolve_name(
+    async def _resolve_name(
         self,
         model: str,
         call_sdk: str | None = None,
@@ -266,11 +315,12 @@ class ProviderRouter:
         provider_name: str | None = None
         model_name = model
 
-        # 1. Explicit prefix: "openai/gpt-4o-mini"
+        # 1. Explicit prefix: "openai/gpt-4o-mini" — a built-in provider OR
+        #    one added via the admin console (catalog_providers).
         if "/" in model:
             parts = model.split("/", 1)
             candidate = parts[0].lower()
-            if candidate in _PROVIDERS:
+            if candidate in _PROVIDERS or await _is_catalog_provider(candidate):
                 provider_name = candidate
                 model_name = parts[1]
 
@@ -296,7 +346,7 @@ class ProviderRouter:
 
     # ── Fallback-aware candidate list ───────────────────────────────────
 
-    def resolve_with_fallbacks(
+    async def resolve_with_fallbacks(
         self,
         model: str,
         call_sdk: str | None = None,
@@ -306,7 +356,7 @@ class ProviderRouter:
         The first entry is the primary resolution.
         Subsequent entries are fallbacks from ``_FALLBACK_CHAIN``.
         """
-        primary_provider_name, primary_model = self._resolve_name(model, call_sdk)
+        primary_provider_name, primary_model = await self._resolve_name(model, call_sdk)
         candidates: list[tuple[BaseProvider, str, str]] = [
             (_get_provider(primary_provider_name), primary_model, primary_provider_name)
         ]
@@ -355,7 +405,7 @@ class ProviderRouter:
         Raises:
             RuntimeError: If all providers (and their retries) are exhausted.
         """
-        candidates = self.resolve_with_fallbacks(model, call_sdk)
+        candidates = await self.resolve_with_fallbacks(model, call_sdk)
         all_errors: list[str] = []
 
         for attempt_idx, (provider, resolved_model, provider_name) in enumerate(candidates):
@@ -459,7 +509,7 @@ class ProviderRouter:
             RuntimeError: If all providers (and their retries) are exhausted
                           before any chunk is produced.
         """
-        candidates = self.resolve_with_fallbacks(model, call_sdk)
+        candidates = await self.resolve_with_fallbacks(model, call_sdk)
         all_errors: list[str] = []
 
         for attempt_idx, (provider, resolved_model, provider_name) in enumerate(candidates):

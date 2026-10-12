@@ -179,6 +179,11 @@ class CatalogProviderRow(Base):
     label: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[int] = mapped_column(Integer, default=1)
+    # Admin-managed credentials ("bring your own provider"). When both are
+    # set, the router serves this provider with these credentials — no .env
+    # key or code change required.
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
@@ -199,6 +204,11 @@ class CatalogModelRow(Base):
     label: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[int] = mapped_column(Integer, default=1)
+    # Optional per-model pricing (USD per 1K tokens). When set, cost
+    # estimation uses these instead of the provider's blended rates —
+    # editable per model in the admin console.
+    input_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )

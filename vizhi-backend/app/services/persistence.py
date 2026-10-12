@@ -83,7 +83,7 @@ async def persist_response(
         output_tokens=provider_response.output_tokens if provider_response else 0,
         status_code=status_code,
         error_message=error_message,
-        estimated_cost=_estimate_cost(provider_response) if provider_response else 0.0,
+        estimated_cost=(await _estimate_cost(provider_response)) if provider_response else 0.0,
         timestamp=_utcnow(),
     )
     db.add(row)
@@ -250,7 +250,7 @@ async def complete_agent_job(
     except (TypeError, ValueError):
         estimated_cost = 0.0
     if estimated_cost == 0.0 and (input_tokens or output_tokens):
-        estimated_cost = _estimate_cost_from_tokens(job.provider, input_tokens, output_tokens)
+        estimated_cost = await _estimate_cost_from_tokens(job.provider, input_tokens, output_tokens)
 
     response_row = ResponseRow(
         id=f"r_{_id()}",
@@ -518,27 +518,111 @@ async def _build_timeseries(
 
 
 # Rough USD pricing per 1K tokens (input, output). Very approximate for P0.
+# Per-1K-token USD prices (input, output). These are blended estimates for
+# each provider's typical model mix — good enough for spend tracking and
+# budget enforcement, not billing. Unknown providers fall back to the
+# mid-tier default so cost is never silently zero.
 _PRICING_PER_1K: dict[str, tuple[float, float]] = {
     "openai": (0.005, 0.015),
     "anthropic": (0.003, 0.015),
     "gemini": (0.001, 0.002),
     "qwen": (0.002, 0.006),
     "nvidia": (0.0006, 0.0018),
-    "huggingface": (0.0, 0.0),  # open models via the HF router
-    "local": (0.0, 0.0),
+    # Open models via the HF router are metered by Nebius/HF at low but
+    # non-zero rates — estimate from their blended per-token pricing.
+    "huggingface": (0.0002, 0.0006),
+    "hf": (0.0002, 0.0006),
+    "local": (0.0, 0.0),  # self-hosted — genuinely free
 }
 
+# Default for admin-added (catalog) providers and anything unmapped.
+_DEFAULT_PRICING: tuple[float, float] = (0.0005, 0.0015)
 
-def _estimate_cost_from_tokens(provider: str, input_tokens: int, output_tokens: int) -> float:
-    """Estimate USD cost from token counts for the given provider."""
-    input_rate, output_rate = _PRICING_PER_1K.get(provider, (0.005, 0.015))
+
+async def _estimate_cost_from_tokens(
+    provider: str,
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None = None,
+) -> float:
+    """Estimate USD cost from token counts for the given provider.
+
+    Resolution order for the per-1K rates:
+    1. Per-model pricing from the catalog (``catalog_models.input_price`` /
+       ``output_price``) — admin-editable, most accurate.
+    2. Per-provider blended rates from ``_PRICING_PER_1K``.
+    3. ``_DEFAULT_PRICING`` for anything unmapped.
+    """
+    input_rate, output_rate = await _resolve_pricing(provider, model)
     return round(
         (input_tokens / 1000) * input_rate
         + (output_tokens / 1000) * output_rate,
-        4,
+        6,
     )
 
 
-def _estimate_cost(resp: ProviderResponse) -> float:
-    """Rough cost estimation per 1K tokens.  Very approximate for P0."""
-    return _estimate_cost_from_tokens(resp.provider, resp.input_tokens, resp.output_tokens)
+async def _resolve_pricing(provider: str, model: str | None) -> tuple[float, float]:
+    """Return (input_rate, output_rate) per 1K tokens for provider/model."""
+    if model:
+        per_model = await _lookup_model_pricing(provider, model)
+        if per_model is not None:
+            return per_model
+    return _PRICING_PER_1K.get(provider.lower(), _DEFAULT_PRICING)
+
+
+# Short TTL cache for catalog model pricing — avoids a DB hit per request;
+# a freshly edited price is picked up within 30s.
+_model_pricing_cache: dict[str, tuple[float, float, float]] = {}  # key → (in, out, expiry)
+_MODEL_PRICING_TTL_SECONDS = 30.0
+
+
+async def _lookup_model_pricing(provider: str, model: str) -> tuple[float, float] | None:
+    """Return catalog per-model (input, output) rates, or None if unset."""
+    import time as _time
+
+    key = f"{provider.lower()}/{model}"
+    now = _time.monotonic()
+    cached = _model_pricing_cache.get(key)
+    if cached is not None and cached[2] > now:
+        return (cached[0], cached[1])
+
+    # The catalog stores models as "provider/model-id"; the router strips
+    # the provider prefix, so reconstruct it for the lookup.
+    catalog_id = model if model.startswith(f"{provider.lower()}/") else f"{provider.lower()}/{model}"
+
+    row = await _fetch_model_pricing(catalog_id)
+    if row is None:
+        return None
+
+    input_price, output_price = row
+    _model_pricing_cache[key] = (input_price, output_price, now + _MODEL_PRICING_TTL_SECONDS)
+    return (input_price, output_price)
+
+
+async def _fetch_model_pricing(catalog_id: str) -> tuple[float, float] | None:
+    """Fetch per-model pricing from the catalog DB."""
+    from sqlalchemy import select
+
+    from app.db.session import async_session_factory
+    from app.models.db_models import CatalogModelRow
+
+    async with async_session_factory() as db:
+        row = (
+            await db.execute(
+                select(
+                    CatalogModelRow.input_price,
+                    CatalogModelRow.output_price,
+                ).where(CatalogModelRow.id == catalog_id)
+            )
+        ).first()
+
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return (float(row[0]), float(row[1]))
+
+
+async def _estimate_cost(resp: ProviderResponse) -> float:
+    """Estimate cost per 1K tokens — per-model catalog pricing when set."""
+    return await _estimate_cost_from_tokens(
+        resp.provider, resp.input_tokens, resp.output_tokens, model=resp.model
+    )
