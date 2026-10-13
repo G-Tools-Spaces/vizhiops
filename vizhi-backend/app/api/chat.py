@@ -30,7 +30,6 @@ from app.schemas.responses import (
 )
 from app.services.agent_ws import agent_ws_manager
 from app.services.persistence import (
-    persist_agent_job,
     persist_query,
     persist_response,
 )
@@ -143,11 +142,49 @@ async def chat_completions(
 
         messages_raw = [m.model_dump() for m in body.messages]
         try:
-            # OPTIMIZATION: Generate IDs upfront and notify agent immediately
             query_id = f"q_{uuid.uuid4().hex[:12]}"
             job_id = f"j_{uuid.uuid4().hex[:12]}"
-            
-            # 1. Notify agent FIRST (before DB writes for speed)
+
+            # 1. Persist QueryRow + AgentJobRow synchronously so the
+            #    response row written by complete_agent_job() always has
+            #    a matching query visible in monitoring.  The previous
+            #    fire-and-forget asyncio.create_task() could silently
+            #    fail or lose the race against the agent, leaving
+            #    "No response data" in the dashboard.
+            query_row = QueryRow(
+                id=query_id,
+                user_id=credential.user_id,
+                agent_id=credential.principal_id,
+                provider=provider_name,
+                model=resolved_model,
+                sdk_type=body.call_sdk,
+                input_messages=json.dumps(messages_raw),
+                endpoint="/v1/chat/completions",
+                timestamp=utcnow(),
+            )
+            db.add(query_row)
+
+            job_row = AgentJobRow(
+                id=job_id,
+                query_id=query_id,
+                user_id=credential.user_id,
+                agent_id=credential.principal_id,
+                provider=provider_name,
+                model=resolved_model,
+                sdk_type=body.call_sdk,
+                endpoint="/v1/chat/completions",
+                kind="chat",
+                input_payload=json.dumps({"messages": messages_raw}),
+                stream=False,
+                metadata_=json.dumps({"source": "chat-gateway"}),
+                status="running",
+                attempt_count=1,
+            )
+            db.add(job_row)
+            await db.commit()
+
+            # 2. Notify agent AFTER the DB commit so the rows are
+            #    guaranteed to exist when the agent completes the job.
             try:
                 await agent_ws_manager.notify(
                     credential.principal_id,
@@ -165,22 +202,8 @@ async def chat_completions(
                 )
             except Exception as exc:
                 logger.warning(f"Failed to notify agent via websocket: {exc}")
-            
-            # 2. Store in DB asynchronously (fire-and-forget for speed)
-            asyncio.create_task(
-                _persist_agent_job_async(
-                    query_id=query_id,
-                    job_id=job_id,
-                    agent_id=credential.principal_id,
-                    user_id=credential.user_id,
-                    provider=provider_name,
-                    model=resolved_model,
-                    sdk_type=body.call_sdk,
-                    messages=messages_raw,
-                )
-            )
-            
-            # 3. Wait for result (agent already started processing!)
+
+            # 3. Wait for result
             return await _wait_for_agent_result(
                 query_id=query_id,
                 job_id=job_id,
@@ -339,13 +362,33 @@ async def chat_completions(
                             latency_ms=final_latency_ms,
                         )
                     else:
+                        # Some providers (non-OpenAI, custom endpoints) don't
+                        # honour stream_options.include_usage, so the SSE
+                        # chunks never carry token counts.  Fall back to a
+                        # rough estimate so cost and token metrics are never
+                        # silently zero for a successful completion.
+                        final_content = _strip_reasoning("".join(chunks))
+                        est_prompt = usage_prompt_tokens
+                        est_completion = usage_completion_tokens
+                        if est_prompt == 0 and est_completion == 0 and final_content:
+                            # ~4 chars per token is the standard GPT heuristic
+                            try:
+                                raw_msgs = json.loads(query_row.input_messages) if query_row.input_messages else []
+                                prompt_text = " ".join(
+                                    m.get("content", "") for m in raw_msgs if isinstance(m, dict)
+                                )
+                                est_prompt = max(len(prompt_text) // 4, 1)
+                            except Exception:
+                                est_prompt = 0
+                            est_completion = max(len(final_content) // 4, 1)
+
                         await persist_response(
                             db,
                             query_id=query_row.id,
                             provider_response=ProviderResponse(
                                 provider=final_provider_name,
                                 model=final_model_name,
-                                content=_strip_reasoning("".join(chunks)),
+                                content=final_content,
                                 raw_response={
                                     "id": f"stream_{query_row.id}",
                                     "object": "chat.completion",
@@ -353,18 +396,18 @@ async def chat_completions(
                                     "choices": [
                                         {
                                             "index": 0,
-                                            "message": {"role": "assistant", "content": _strip_reasoning("".join(chunks))},
+                                            "message": {"role": "assistant", "content": final_content},
                                             "finish_reason": "stop",
                                         }
                                     ],
                                     "usage": {
-                                        "prompt_tokens": usage_prompt_tokens,
-                                        "completion_tokens": usage_completion_tokens,
-                                        "total_tokens": usage_prompt_tokens + usage_completion_tokens,
+                                        "prompt_tokens": est_prompt,
+                                        "completion_tokens": est_completion,
+                                        "total_tokens": est_prompt + est_completion,
                                     },
                                 },
-                                input_tokens=usage_prompt_tokens,
-                                output_tokens=usage_completion_tokens,
+                                input_tokens=est_prompt,
+                                output_tokens=est_completion,
                                 finish_reason=finish_reason,
                                 latency_ms=final_latency_ms,
                             ),
@@ -507,58 +550,6 @@ async def chat_completions(
             original_provider=provider_name if fallback_result.used_fallback else None,
         ),
     )
-
-
-async def _persist_agent_job_async(
-    *,
-    query_id: str,
-    job_id: str,
-    agent_id: str,
-    user_id: str | None,
-    provider: str,
-    model: str,
-    sdk_type: str | None,
-    messages: list[dict],
-) -> None:
-    """Persist job to database asynchronously (non-blocking for speed)."""
-    try:
-        async with async_session_factory() as db:
-            # Save query
-            query_row = QueryRow(
-                id=query_id,
-                user_id=user_id,
-                agent_id=agent_id,
-                provider=provider,
-                model=model,
-                sdk_type=sdk_type,
-                input_messages=json.dumps(messages),
-                endpoint="/v1/chat/completions",
-                timestamp=utcnow(),
-            )
-            db.add(query_row)
-            
-            # Save job
-            job_row = AgentJobRow(
-                id=job_id,
-                query_id=query_id,
-                user_id=user_id,
-                agent_id=agent_id,
-                provider=provider,
-                model=model,
-                sdk_type=sdk_type,
-                endpoint="/v1/chat/completions",
-                kind="chat",
-                input_payload=json.dumps({"messages": messages}),
-                stream=False,
-                metadata_=json.dumps({"source": "chat-gateway"}),
-                status="running",  # Already running!
-                attempt_count=1,
-            )
-            db.add(job_row)
-            await db.commit()
-            logger.info(f"Persisted agent job {job_id} for query {query_id}")
-    except Exception as exc:
-        logger.error(f"Failed to persist agent job {job_id}: {exc}")
 
 
 async def _wait_for_agent_result(
