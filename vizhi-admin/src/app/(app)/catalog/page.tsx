@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type CatalogProvider } from "@/lib/api";
+import { ADAPTERS, adapterInfo } from "@/lib/providers";
 
 export default function CatalogPage() {
   const queryClient = useQueryClient();
@@ -30,6 +31,7 @@ export default function CatalogPage() {
   const [newOrder, setNewOrder] = useState("0");
   const [newApiKey, setNewApiKey] = useState("");
   const [newBaseUrl, setNewBaseUrl] = useState("");
+  const [newAdapter, setNewAdapter] = useState<string>("openai");
 
   const createProvider = useMutation({
     mutationFn: () =>
@@ -39,6 +41,7 @@ export default function CatalogPage() {
         sort_order: Number(newOrder) || 0,
         ...(newApiKey.trim() ? { api_key: newApiKey.trim() } : {}),
         ...(newBaseUrl.trim() ? { base_url: newBaseUrl.trim() } : {}),
+        adapter: newAdapter,
       }),
     onSuccess: (provider) => {
       toast.success(
@@ -51,6 +54,7 @@ export default function CatalogPage() {
       setNewOrder("0");
       setNewApiKey("");
       setNewBaseUrl("");
+      setNewAdapter("openai");
       invalidate();
     },
     onError: (exc) => toast.error(exc.message),
@@ -360,19 +364,38 @@ export default function CatalogPage() {
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">
-                Base URL <span className="normal-case text-[var(--ink-tertiary)]">(OpenAI-compatible)</span>
+                API style <span className="normal-case text-[var(--ink-tertiary)]">(which client it speaks)</span>
+              </label>
+              <select
+                value={newAdapter}
+                onChange={(e) => setNewAdapter(e.target.value)}
+                className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
+              >
+                {ADAPTERS.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[var(--ink-tertiary)]">{adapterInfo(newAdapter).hint}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium uppercase tracking-wide text-[var(--ink-tertiary)]">
+                Base URL <span className="normal-case text-[var(--ink-tertiary)]">(as the provider&apos;s SDK takes it)</span>
               </label>
               <input
                 value={newBaseUrl}
                 onChange={(e) => setNewBaseUrl(e.target.value)}
-                placeholder="https://api.groq.com/openai/v1"
+                placeholder={adapterInfo(newAdapter).baseUrlPlaceholder}
                 className="w-full rounded-[12px] border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
               />
             </div>
 
             <p className="text-xs text-[var(--ink-tertiary)]">
               With an API key and base URL, the gateway serves this provider
-              immediately — no .env change or redeploy needed.
+              within seconds — no .env change or redeploy needed. For
+              built-ins (openai, nvidia, …) the base URL can be left empty.
             </p>
 
             <button

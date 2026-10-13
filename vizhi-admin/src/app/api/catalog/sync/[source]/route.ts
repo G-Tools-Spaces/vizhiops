@@ -1,10 +1,10 @@
 /**
  * POST /api/catalog/sync/:source — pull live models into the catalog.
  *
- * source: "nvidia" | "huggingface" (env-keyed built-ins) or any other
- * provider id that exists in catalog_providers with stored credentials
- * (e.g. "nebius", "groq", …) — those are synced with their own DB-stored
- * key + base URL, so admin-added providers get one-click model import too.
+ * source: any provider id in catalog_providers ("nvidia", "nebius", …).
+ * Models are listed with the provider's console-stored key, base URL and
+ * API style (OpenAI / Anthropic / Gemini / Azure). "nvidia" and
+ * "huggingface" are auto-created and may still fall back to an env key.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,11 +16,9 @@ import {
   type CatalogProviderRow,
 } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
+import { effectiveSettings, modelsRequest } from "@/lib/providers";
 
 type Params = { params: Promise<{ source: string }> };
-
-const NVIDIA_BASE = "https://integrate.api.nvidia.com/v1";
-const HF_BASE = "https://router.huggingface.co/v1";
 
 // Model-id keywords that indicate non-chat models — skipped on import.
 const NON_CHAT_KEYWORDS = [
@@ -37,43 +35,45 @@ function isChatModel(id: string): boolean {
 
 type FetchResult = { models: { id: string; label: string }[]; origin: string };
 
-async function fetchFromUrl(url: string, apiKey: string): Promise<FetchResult> {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(15_000),
-  });
+type ModelList = {
+  data?: { id?: string }[];
+  // Gemini: { models: [{ name: "models/gemini-2.5-flash", supportedGenerationMethods: [...] }] }
+  models?: { name?: string; displayName?: string; supportedGenerationMethods?: string[] }[];
+};
+
+async function fetchModels(provider: CatalogProviderRow): Promise<FetchResult> {
+  // The console key first; .env only as a fallback for the two built-ins
+  // that used to be env-keyed.
+  const envKey =
+    provider.id === "nvidia"
+      ? process.env.NVIDIA_API_KEY
+      : provider.id === "huggingface"
+        ? process.env.HUGGINGFACE_API_KEY ?? process.env.HF_TOKEN
+        : undefined;
+  const apiKey = provider.api_key || envKey || "";
+  const { adapter, baseUrl } = effectiveSettings(provider.id, provider.adapter, provider.base_url);
+  if (!apiKey || !baseUrl) {
+    return { models: [], origin: "unconfigured" };
+  }
+
+  const { url, headers } = modelsRequest(adapter, baseUrl, apiKey);
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) {
     return { models: [], origin: `upstream-${res.status}` };
   }
-  const data = (await res.json()) as { data?: { id?: string }[] };
-  const models = (data.data ?? [])
-    .filter((m) => m.id && isChatModel(m.id!))
-    .map((m) => ({ id: m.id!, label: m.id! }));
-  return { models, origin: "live" };
-}
+  const data = (await res.json()) as ModelList;
 
-async function fetchModels(source: string, provider: CatalogProviderRow | null): Promise<FetchResult> {
-  // Built-in, env-keyed sources.
-  if (source === "nvidia") {
-    const key = process.env.NVIDIA_API_KEY ?? "";
-    if (!key) return { models: [], origin: "unconfigured" };
-    return fetchFromUrl(`${NVIDIA_BASE}/models`, key);
-  }
-  if (source === "huggingface") {
-    const key = process.env.HUGGINGFACE_API_KEY ?? process.env.HF_TOKEN ?? "";
-    if (!key) return { models: [], origin: "unconfigured" };
-    return fetchFromUrl(`${HF_BASE}/models`, key);
-  }
+  const models =
+    adapter === "gemini"
+      ? (data.models ?? [])
+          .filter((m) => m.name && (m.supportedGenerationMethods ?? []).includes("generateContent"))
+          .map((m) => {
+            const id = m.name!.replace(/^models\//, "");
+            return { id, label: m.displayName || id };
+          })
+      : (data.data ?? []).filter((m) => m.id).map((m) => ({ id: m.id!, label: m.id! }));
 
-  // Any other source: a catalog provider with stored credentials.
-  if (!provider) {
-    throw new Error(`Unknown sync source: ${source}`);
-  }
-  if (!provider.api_key || !provider.base_url) {
-    return { models: [], origin: "unconfigured" };
-  }
-  const base = provider.base_url.replace(/\/+$/, "").replace(/\/v1$/, "");
-  return fetchFromUrl(`${base}/v1/models`, provider.api_key);
+  return { models: models.filter((m) => isChatModel(m.id)), origin: "live" };
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   let models: { id: string; label: string }[] = [];
   let origin = "live";
   try {
-    ({ models, origin } = await fetchModels(source, provider));
+    ({ models, origin } = await fetchModels(provider!));
   } catch {
     origin = "unreachable";
   }

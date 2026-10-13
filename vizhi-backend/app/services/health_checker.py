@@ -163,7 +163,7 @@ async def _probe_provider(cfg: dict) -> ProviderHealth:
                 provider=name,
                 label=label,
                 status="unconfigured",
-                message=f"No API key configured ({requires_key}). Set it in .env to enable health checks.",
+                message="No API key configured. Add it in the vizhi-admin console to enable health checks.",
                 last_checked=_now(),
             )
 
@@ -285,39 +285,47 @@ def _now() -> str:
 # ── Full health check sweep ─────────────────────────────────────────────
 
 async def _catalog_provider_configs() -> list[dict]:
-    """Build probe configs for admin-added providers (catalog_providers rows
-    with stored credentials). These are probed with their own base_url + key,
-    so Nebius/Groq/etc. show up on the Health page like the built-ins."""
+    """Probe configs for every catalog provider with a key saved in the admin
+    console. Each is probed with its resolved key, base URL and adapter, so
+    Nebius/Groq/etc. show up on the Health page, and a built-in whose key was
+    entered in the console (e.g. NVIDIA) reports on that key rather than
+    "unconfigured" for a missing .env value."""
     from sqlalchemy import select
 
     from app.db.session import async_session_factory
     from app.models.db_models import CatalogProviderRow
+    from app.providers.adapters import models_request
+    from app.providers.provider_config import builtin_ids, canonical, resolve_provider_config
 
     try:
         async with async_session_factory() as db:
             rows = (
                 await db.execute(
-                    select(CatalogProviderRow).where(
+                    select(CatalogProviderRow.id, CatalogProviderRow.label).where(
                         CatalogProviderRow.api_key.isnot(None),
-                        CatalogProviderRow.base_url.isnot(None),
+                        CatalogProviderRow.api_key != "",
                     )
                 )
-            ).scalars().all()
+            ).all()
     except Exception:
         return []  # DB unavailable — skip catalog probes this cycle
 
     configs = []
-    for row in rows:
-        if not row.api_key or not row.base_url:
-            continue
-        base = row.base_url.rstrip("/").removesuffix("/v1")
+    for provider_id, label in rows:
+        try:
+            cfg = await resolve_provider_config(provider_id)
+        except RuntimeError:
+            continue  # e.g. no base URL yet
+        url, headers = models_request(cfg)
+        # A built-in's console key replaces its .env-keyed probe result.
+        name = canonical(provider_id) if canonical(provider_id) in builtin_ids() else provider_id
         configs.append(
             {
-                "name": row.id,
-                "label": row.label,
-                "probe_url": f"{base}/v1/models",
+                "name": name,
+                "label": label,
+                "probe_url": url,
                 "method": "GET",
-                "headers_fn": lambda k=row.api_key: {"Authorization": f"Bearer {k}"},
+                "headers_fn": lambda h=headers: h,
                 "requires_key": None,  # credentials already in hand
             }
         )

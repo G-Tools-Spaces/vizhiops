@@ -13,6 +13,7 @@
  */
 
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { builtinFor, effectiveSettings } from "@/lib/providers";
 
 type Connection = { connectionString: string; ssl: false | { rejectUnauthorized: false } };
 
@@ -109,6 +110,7 @@ export type CatalogProviderRow = {
   enabled: number;
   api_key: string | null;
   base_url: string | null;
+  adapter: string | null;
 };
 
 export type CatalogModelRow = {
@@ -147,15 +149,22 @@ export function maskKey(key: string | null): string | null {
 }
 
 export function providerDict(row: CatalogProviderRow, models: CatalogModelRow[]) {
+  const effective = effectiveSettings(row.id, row.adapter, row.base_url);
   return {
     id: row.id,
     label: row.label,
     sort_order: row.sort_order,
     enabled: Boolean(row.enabled),
     models: models.map(modelDict),
-    has_credentials: Boolean(row.api_key && row.base_url),
+    // Callable through the gateway with a console-managed key: built-ins
+    // need only the key (their base URL has a default).
+    has_credentials: Boolean(row.api_key && effective.baseUrl),
     api_key_masked: maskKey(row.api_key),
     base_url: row.base_url,
+    adapter: row.adapter,
+    effective_adapter: effective.adapter,
+    effective_base_url: effective.baseUrl,
+    is_builtin: builtinFor(row.id) !== null,
   };
 }
 

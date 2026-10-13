@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type CatalogModel } from "@/lib/api";
+import { ADAPTERS, adapterInfo } from "@/lib/providers";
 
 export default function ProviderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -25,6 +26,8 @@ export default function ProviderDetailPage() {
   // ── Credentials state (rotate / clear) ───────────────────────────────
   const [credApiKey, setCredApiKey] = useState("");
   const [credBaseUrl, setCredBaseUrl] = useState("");
+  // null = untouched (show the provider's current API style).
+  const [credAdapter, setCredAdapter] = useState<string | null>(null);
 
   const syncProvider = useMutation({
     mutationFn: () => api.syncProvider(providerId),
@@ -48,10 +51,12 @@ export default function ProviderDetailPage() {
       api.updateProvider(providerId, {
         ...(credApiKey.trim() ? { api_key: credApiKey.trim() } : {}),
         ...(credBaseUrl.trim() ? { base_url: credBaseUrl.trim() } : {}),
+        ...(credAdapter !== null ? { adapter: credAdapter } : {}),
       }),
     onSuccess: () => {
-      toast.success("Credentials saved — live on the next request");
+      toast.success("Saved — the gateway picks it up within ~15 seconds");
       setCredApiKey("");
+      setCredAdapter(null);
       invalidate();
     },
     onError: (exc) => toast.error(exc.message),
@@ -177,7 +182,9 @@ export default function ProviderDetailPage() {
         <p className="mt-1 text-sm text-[var(--ink-secondary)]">
           {provider.has_credentials
             ? "This provider is served by the gateway with the key below."
-            : "Add an API key and base URL to make this provider callable through the gateway — no .env change needed."}
+            : provider.is_builtin
+              ? "Paste the API key to make this provider callable through the gateway — the base URL is optional (default shown below). No .env change needed."
+              : "Add an API key and base URL to make this provider callable through the gateway — no .env change needed."}
         </p>
 
         {provider.has_credentials ? (
@@ -188,9 +195,12 @@ export default function ProviderDetailPage() {
             <code className="text-xs text-[var(--ink-secondary)]">
               {provider.api_key_masked}
             </code>
-            {provider.base_url ? (
-              <code className="text-xs text-[var(--ink-tertiary)]">{provider.base_url}</code>
+            {provider.effective_base_url ? (
+              <code className="text-xs text-[var(--ink-tertiary)]">{provider.effective_base_url}</code>
             ) : null}
+            <span className="text-xs text-[var(--ink-tertiary)]">
+              {adapterInfo(provider.effective_adapter).label}
+            </span>
             <button
               type="button"
               onClick={() => syncProvider.mutate()}
@@ -212,7 +222,7 @@ export default function ProviderDetailPage() {
         ) : null}
 
         <form
-          className="mt-4 grid gap-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end"
+          className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto] sm:items-end"
           onSubmit={(event) => {
             event.preventDefault();
             updateCredentials.mutate();
@@ -232,17 +242,42 @@ export default function ProviderDetailPage() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-[var(--ink-secondary)]">Base URL</label>
+            <label className="text-xs font-medium text-[var(--ink-secondary)]">API style</label>
+            <select
+              value={credAdapter ?? provider.effective_adapter}
+              onChange={(e) => setCredAdapter(e.target.value)}
+              title={adapterInfo(credAdapter ?? provider.effective_adapter).hint}
+              className="w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+            >
+              {ADAPTERS.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--ink-secondary)]">
+              Base URL {provider.is_builtin ? <span className="font-normal text-[var(--ink-tertiary)]">(optional)</span> : null}
+            </label>
             <input
               value={credBaseUrl}
               onChange={(e) => setCredBaseUrl(e.target.value)}
-              placeholder={provider.base_url ?? "https://api.groq.com/openai/v1"}
+              placeholder={
+                provider.effective_base_url ??
+                adapterInfo(credAdapter ?? provider.effective_adapter).baseUrlPlaceholder
+              }
               className="w-full rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
             />
           </div>
           <button
             type="submit"
-            disabled={updateCredentials.isPending || (!credApiKey.trim() && !credBaseUrl.trim())}
+            disabled={
+              updateCredentials.isPending ||
+              (!credApiKey.trim() &&
+                !credBaseUrl.trim() &&
+                (credAdapter === null || credAdapter === provider.effective_adapter))
+            }
             className="rounded-[var(--radius-md)] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-[var(--brand-ink)] transition hover:bg-[var(--brand-hover)] disabled:opacity-60"
           >
             {provider.has_credentials ? "Update" : "Save credentials"}

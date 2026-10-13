@@ -1,6 +1,7 @@
 /**
  * GET  /api/catalog/providers — list all providers with their models.
- * POST /api/catalog/providers — create a provider (optionally with credentials).
+ * POST /api/catalog/providers — create a provider (optionally with credentials
+ *                                and the API style / adapter the gateway uses).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +15,7 @@ import {
   type CatalogProviderRow,
 } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
+import { ADAPTERS, isAdapterId } from "@/lib/providers";
 
 const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
   const sortOrder = Number(body.sort_order ?? 0) || 0;
   const apiKey = String(body.api_key ?? "").trim() || null;
   const baseUrl = String(body.base_url ?? "").trim().replace(/\/+$/, "") || null;
+  const adapter = String(body.adapter ?? "").trim() || null;
 
   if (!PROVIDER_ID_RE.test(id)) {
     return NextResponse.json(
@@ -69,6 +72,12 @@ export async function POST(request: NextRequest) {
   if (!label) {
     return NextResponse.json({ detail: "Label is required" }, { status: 422 });
   }
+  if (adapter !== null && !isAdapterId(adapter)) {
+    return NextResponse.json(
+      { detail: `Adapter must be one of: ${ADAPTERS.map((a) => a.id).join(", ")}` },
+      { status: 422 },
+    );
+  }
 
   const existing = await queryOne<{ id: string }>(
     "SELECT id FROM catalog_providers WHERE id = $1",
@@ -79,8 +88,8 @@ export async function POST(request: NextRequest) {
   }
 
   await execute(
-    "INSERT INTO catalog_providers (id, label, sort_order, enabled, api_key, base_url) VALUES ($1, $2, $3, 1, $4, $5)",
-    [id, label, sortOrder, apiKey, baseUrl],
+    "INSERT INTO catalog_providers (id, label, sort_order, enabled, api_key, base_url, adapter) VALUES ($1, $2, $3, 1, $4, $5, $6)",
+    [id, label, sortOrder, apiKey, baseUrl, adapter],
   );
 
   const row = (await loadProvider(id))!;

@@ -32,6 +32,10 @@ export type CatalogProvider = {
   has_credentials: boolean;
   api_key_masked: string | null;
   base_url: string | null;
+  adapter: string | null;
+  effective_adapter: string;
+  effective_base_url: string | null;
+  is_builtin: boolean;
 };
 
 export type ProviderCreateInput = {
@@ -41,6 +45,7 @@ export type ProviderCreateInput = {
   enabled?: boolean;
   api_key?: string;
   base_url?: string;
+  adapter?: string;
 };
 
 export type ProviderUpdateInput = {
@@ -49,6 +54,7 @@ export type ProviderUpdateInput = {
   enabled?: boolean;
   api_key?: string;
   base_url?: string;
+  adapter?: string;
 };
 
 export type ModelCreateInput = {
