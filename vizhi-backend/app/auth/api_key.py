@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 import uuid
+from typing import Any
 
 import bcrypt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fastapi import Depends, Header, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 from sqlalchemy import select
@@ -51,6 +53,92 @@ def _fast_hash(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
+# ── Verified-key cache ───────────────────────────────────────────────────
+#
+# bcrypt at cost 12 takes ~200 ms on a laptop core and seconds on a small
+# cloud instance, and the token tables have no fingerprint column, so a scan
+# verifies the key against every active row. The gateway pays that on every
+# call. This cache remembers which row a raw key matched:
+#
+#     sha256(raw_key) -> (table, primary key, bcrypt hash that matched)
+#
+# A hit still reads the row by primary key and only counts when the row is
+# active and its hash is unchanged, so revoking or rotating a token takes
+# effect on the very next request exactly as before. Only the bcrypt work is
+# skipped. In-memory, per process; nothing is persisted.
+
+_KEY_CACHE: dict[str, tuple[str, str, str]] = {}
+_KEY_CACHE_MAX = 10_000
+
+
+async def _verify_async(raw_key: str, hashed: str) -> bool:
+    """bcrypt.checkpw off the event loop, so a slow hash does not stall
+    every other request and open stream on the server."""
+    return await asyncio.to_thread(verify_api_key, raw_key, hashed)
+
+
+def _remember(raw_key: str, row: AgentRow | ModelConnectionRow) -> None:
+    if len(_KEY_CACHE) >= _KEY_CACHE_MAX:
+        _KEY_CACHE.clear()
+    _KEY_CACHE[_fast_hash(raw_key)] = (row.__tablename__, row.id, row.api_key_hash)
+
+
+def _forget(raw_key: str) -> None:
+    _KEY_CACHE.pop(_fast_hash(raw_key), None)
+
+
+def clear_key_cache() -> None:
+    """Drop every cached verification (tests)."""
+    _KEY_CACHE.clear()
+
+
+async def _row_matching_cached_key(
+    db: AsyncSession, raw_key: str, model: type[AgentRow] | type[ModelConnectionRow]
+) -> AgentRow | ModelConnectionRow | None:
+    """The cached row for this key if it is still active with the same hash."""
+    hit = _KEY_CACHE.get(_fast_hash(raw_key))
+    if hit is None or hit[0] != model.__tablename__:
+        return None
+    _, pk, hashed = hit
+    row = await db.get(model, pk)
+    if row is not None and row.status == "active" and row.api_key_hash == hashed:
+        return row
+    _forget(raw_key)
+    return None
+
+
+async def _verify_row(raw_key: str, row: AgentRow | ModelConnectionRow) -> bool:
+    """Verify a key against one specific row, using the cache when it already
+    proved this key against this row's current hash."""
+    hit = _KEY_CACHE.get(_fast_hash(raw_key))
+    if hit == (row.__tablename__, row.id, row.api_key_hash):
+        return True
+    if await _verify_async(raw_key, row.api_key_hash):
+        _remember(raw_key, row)
+        return True
+    return False
+
+
+async def _find_active_row(
+    db: AsyncSession, raw_key: str, model: type[AgentRow] | type[ModelConnectionRow]
+) -> AgentRow | ModelConnectionRow | None:
+    """The active row whose hash matches `raw_key`: cache first, then the
+    scan, most recently used tokens first so a live key is found early."""
+    row = await _row_matching_cached_key(db, raw_key, model)
+    if row is not None:
+        return row
+    result = await db.execute(
+        select(model)
+        .where(model.status == "active")
+        .order_by(model.last_used_at.desc().nulls_last())
+    )
+    for candidate in result.scalars().all():
+        if await _verify_async(raw_key, candidate.api_key_hash):
+            _remember(raw_key, candidate)
+            return candidate
+    return None
+
+
 @dataclass(frozen=True)
 class ChatCredential:
     """Authenticated credential used by the chat gateway."""
@@ -59,6 +147,8 @@ class ChatCredential:
     token_type: str
     model_name: str | None = None
     user_id: str | None = None
+    # The token row auth loaded, so the budget check need not fetch it again.
+    row: Any = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -109,15 +199,10 @@ async def resolve_agent(
     """
     raw_key = _extract_bearer_token(authorization)
 
-    # Scan agents and bcrypt-verify.  For P0 scale this is fine;
-    # P1 adds a SHA-256 fingerprint column for indexed lookup.
-    result = await db.execute(select(AgentRow).where(AgentRow.status == "active"))
-    agents = result.scalars().all()
-
-    for agent in agents:
-        if verify_api_key(raw_key, agent.api_key_hash):
-            await _touch_agent_last_used(db, agent)
-            return agent
+    agent = await _find_active_row(db, raw_key, AgentRow)
+    if agent is not None:
+        await _touch_agent_last_used(db, agent)
+        return agent
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -137,28 +222,26 @@ async def resolve_chat_credential(
     """
     raw_key = _extract_bearer_token(authorization)
 
-    model_result = await db.execute(
-        select(ModelConnectionRow).where(ModelConnectionRow.status == "active")
-    )
-    for model_connection in model_result.scalars().all():
-        if verify_api_key(raw_key, model_connection.api_key_hash):
-            await _touch_last_used(db, model_connection)
-            return ChatCredential(
-                principal_id=model_connection.id,
-                token_type="model",
-                model_name=model_connection.model_name,
-                user_id=model_connection.user_id,
-            )
+    model_connection = await _find_active_row(db, raw_key, ModelConnectionRow)
+    if model_connection is not None:
+        await _touch_last_used(db, model_connection)
+        return ChatCredential(
+            principal_id=model_connection.id,
+            token_type="model",
+            model_name=model_connection.model_name,
+            user_id=model_connection.user_id,
+            row=model_connection,
+        )
 
-    agent_result = await db.execute(select(AgentRow).where(AgentRow.status == "active"))
-    for agent in agent_result.scalars().all():
-        if verify_api_key(raw_key, agent.api_key_hash):
-            await _touch_agent_last_used(db, agent)
-            return ChatCredential(
-                principal_id=agent.agent_id,
-                token_type="agent",
-                user_id=agent.user_id,
-            )
+    agent = await _find_active_row(db, raw_key, AgentRow)
+    if agent is not None:
+        await _touch_agent_last_used(db, agent)
+        return ChatCredential(
+            principal_id=agent.agent_id,
+            token_type="agent",
+            user_id=agent.user_id,
+            row=agent,
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -186,7 +269,7 @@ async def resolve_gateway_credential(
             )
         )
         agent = result.scalars().first()
-        if not agent or not verify_api_key(x_agent_token, agent.api_key_hash):
+        if not agent or not await _verify_row(x_agent_token, agent):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid agent credentials",
@@ -195,6 +278,7 @@ async def resolve_gateway_credential(
             principal_id=agent.agent_id,
             token_type="agent",
             user_id=agent.user_id,
+            row=agent,
         )
 
     return await resolve_chat_credential(authorization, db)
@@ -232,7 +316,7 @@ async def verify_agent_queue_credentials(
         )
     )
     agent = result.scalars().first()
-    if not agent or not verify_api_key(agent_token, agent.api_key_hash):
+    if not agent or not await _verify_row(agent_token, agent):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent credentials",

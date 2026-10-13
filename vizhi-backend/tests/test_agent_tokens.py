@@ -9,101 +9,18 @@ Coverage:
   - Authentication succeeds with valid token; last_used_at is updated
   - Revocation: revoked token cannot authenticate; status becomes "revoked"
   - Rotation: new token works; old token rejected; metadata preserved
+
+Database fixtures (`authed_client`, `db`) come from tests/conftest.py and run
+against TEST_DATABASE_URL (PostgreSQL); the tests are skipped without it.
 """
 
 from __future__ import annotations
 
 import datetime
-import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import app
-from app.db.session import get_db
-from app.models.db_models import Base, UserRow, AuthAccountRow
 from app.auth.api_key import hash_api_key, verify_api_key
-
-
-# ── Test database (in-memory SQLite) ────────────────────────────────────────
-
-TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
-
-_test_engine = create_async_engine(
-    TEST_DB_URL,
-    echo=False,
-    connect_args={"check_same_thread": False},
-)
-_test_session_factory = async_sessionmaker(
-    _test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
-
-
-async def _override_get_db():  # type: ignore[override]
-    async with _test_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-
-
-app.dependency_overrides[get_db] = _override_get_db
-
-
-# ── Fixtures ─────────────────────────────────────────────────────────────────
-
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def _setup_db():
-    """Create all tables once for the test session."""
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-
-@pytest_asyncio.fixture
-async def _seed_user():
-    """Insert a test user + password auth account, return (user_id, email, password)."""
-    import uuid
-    import bcrypt
-
-    user_id = f"u_{uuid.uuid4().hex[:8]}"
-    email = f"test_{uuid.uuid4().hex[:6]}@example.com"
-    password = "TestPass123!"
-    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-    async with _test_session_factory() as db:
-        db.add(UserRow(id=user_id, email=email, email_verified=1, name="Test User"))
-        db.add(
-            AuthAccountRow(
-                id=f"aa_{uuid.uuid4().hex[:8]}",
-                user_id=user_id,
-                provider="password",
-                password_hash=pw_hash,
-            )
-        )
-        await db.commit()
-
-    return user_id, email, password
-
-
-@pytest_asyncio.fixture
-async def authed_client(_seed_user):
-    """Return an AsyncClient that is already logged in."""
-    _, email, password = _seed_user
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        resp = await client.post("/v1/auth/login", json={"email": email, "password": password})
-        assert resp.status_code == 200, resp.text
-        yield client
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

@@ -1,29 +1,94 @@
 /**
- * Direct access to the shared Vizhi database.
+ * Direct access to the shared Vizhi database (PostgreSQL: Supabase or Neon).
  *
- * vizhi-admin is self-contained: its API routes read/write the same SQLite
- * database the gateway uses (catalog, users, auth accounts). The path is
- * configurable so production can point elsewhere.
+ * vizhi-admin is self-contained: its API routes read/write the same tables
+ * the gateway uses (catalog_providers, catalog_models, users, auth_accounts),
+ * over the same DATABASE_URL. The connection string can be pasted exactly as
+ * the provider's console shows it: a SQLAlchemy driver suffix
+ * (`postgresql+asyncpg://`) is dropped and libpq-only parameters
+ * (`sslmode`, `channel_binding`) are translated into node-postgres options.
  *
- * Uses Node's built-in `node:sqlite` (DatabaseSync) — no native dependency.
+ * The schema is owned by the backend's Alembic migrations; nothing here
+ * creates tables.
  */
 
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-export const DB_PATH = process.env.VIZHI_DB_PATH
-  ? path.resolve(process.env.VIZHI_DB_PATH)
-  : path.resolve(process.cwd(), "../vizhi-backend/vizhi.db");
+type Connection = { connectionString: string; ssl: false | { rejectUnauthorized: false } };
 
-let _db: DatabaseSync | null = null;
-
-export function db(): DatabaseSync {
-  if (!_db) {
-    _db = new DatabaseSync(DB_PATH);
-    _db.exec("PRAGMA journal_mode = WAL;");
-    _db.exec("PRAGMA foreign_keys = ON;");
+export function connectionOptions(raw: string | undefined = process.env.DATABASE_URL): Connection {
+  if (!raw) {
+    throw new Error("DATABASE_URL is not set (vizhi-admin needs the same PostgreSQL URL as the gateway)");
   }
-  return _db;
+  const url = new URL(raw);
+  if (!/^postgres(ql)?(\+[a-z0-9]+)?:$/.test(url.protocol)) {
+    throw new Error(`DATABASE_URL must be a PostgreSQL URL; got '${url.protocol}//'`);
+  }
+  url.protocol = "postgresql:";
+
+  const sslmode = url.searchParams.get("sslmode");
+  url.searchParams.delete("sslmode");
+  url.searchParams.delete("channel_binding");
+
+  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  // libpq's `require` means "encrypt, do not verify", which is what hosted
+  // poolers expect; an explicit `disable`, or a local database with no mode,
+  // means plain TCP.
+  const ssl: Connection["ssl"] =
+    sslmode === "disable" || (sslmode === null && local) ? false : { rejectUnauthorized: false };
+
+  return { connectionString: url.toString(), ssl };
+}
+
+// One pool per process; kept on globalThis so Next's dev-mode module
+// reloads do not leak connections.
+const globalForPg = globalThis as unknown as { __vizhiPool?: Pool };
+
+export function pool(): Pool {
+  if (!globalForPg.__vizhiPool) {
+    const { connectionString, ssl } = connectionOptions();
+    globalForPg.__vizhiPool = new Pool({
+      connectionString,
+      ssl,
+      // The admin console is low-traffic and shares a small free-tier
+      // database with the gateway: a handful of connections is plenty.
+      max: 3,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
+  }
+  return globalForPg.__vizhiPool;
+}
+
+export async function query<T extends QueryResultRow>(sql: string, params: unknown[] = []): Promise<T[]> {
+  const result = await pool().query<T>(sql, params);
+  return result.rows;
+}
+
+export async function queryOne<T extends QueryResultRow>(sql: string, params: unknown[] = []): Promise<T | null> {
+  const rows = await query<T>(sql, params);
+  return rows[0] ?? null;
+}
+
+/** Run a statement and return the affected row count. */
+export async function execute(sql: string, params: unknown[] = []): Promise<number> {
+  const result = await pool().query(sql, params);
+  return result.rowCount ?? 0;
+}
+
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    const value = await fn(client);
+    await client.query("COMMIT");
+    return value;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Row types ────────────────────────────────────────────────────────────
@@ -56,7 +121,24 @@ export type CatalogModelRow = {
   output_price: number | null;
 };
 
-// ── Shared serializers (mirror the old Python API shapes) ────────────────
+// ── Loaders shared by the catalog routes ────────────────────────────────
+
+export function loadProvider(id: string): Promise<CatalogProviderRow | null> {
+  return queryOne<CatalogProviderRow>("SELECT * FROM catalog_providers WHERE id = $1", [id]);
+}
+
+export function loadModels(providerId: string): Promise<CatalogModelRow[]> {
+  return query<CatalogModelRow>(
+    "SELECT * FROM catalog_models WHERE provider_id = $1 ORDER BY sort_order, id",
+    [providerId],
+  );
+}
+
+export function loadModel(id: string): Promise<CatalogModelRow | null> {
+  return queryOne<CatalogModelRow>("SELECT * FROM catalog_models WHERE id = $1", [id]);
+}
+
+// ── Shared serializers (mirror the gateway's API shapes) ─────────────────
 
 export function maskKey(key: string | null): string | null {
   if (!key) return null;
@@ -64,10 +146,7 @@ export function maskKey(key: string | null): string | null {
   return `${key.slice(0, 4)}…${key.slice(-4)}`;
 }
 
-export function providerDict(
-  row: CatalogProviderRow,
-  models: CatalogModelRow[],
-) {
+export function providerDict(row: CatalogProviderRow, models: CatalogModelRow[]) {
   return {
     id: row.id,
     label: row.label,

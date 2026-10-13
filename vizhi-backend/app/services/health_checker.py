@@ -26,11 +26,14 @@ from dataclasses import dataclass, field
 import httpx
 
 from app.config.settings import settings
+from app.providers.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
 # ── Configurable thresholds ─────────────────────────────────────────────
-HEALTH_CHECK_INTERVAL_SECONDS: int = 60   # how often to re-probe
+# Five minutes: the routing layer never reads this cache (only the dashboard
+# does), so a probe per provider per minute was pure CPU on a small instance.
+HEALTH_CHECK_INTERVAL_SECONDS: int = 300  # how often to re-probe
 LATENCY_DEGRADED_MS: int = 3_000         # above this → "degraded"
 PROBE_TIMEOUT_SECONDS: float = 10.0       # per-request timeout
 
@@ -169,13 +172,13 @@ async def _probe_provider(cfg: dict) -> ProviderHealth:
 
     try:
         t0 = time.perf_counter()
-        async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS) as client:
-            resp = await client.request(
-                method,
-                probe_url,
-                headers=headers,
-                params=params,
-            )
+        resp = await get_http_client().request(
+            method,
+            probe_url,
+            headers=headers,
+            params=params,
+            timeout=PROBE_TIMEOUT_SECONDS,
+        )
         latency_ms = int((time.perf_counter() - t0) * 1000)
 
         is_local = cfg.get("is_local", False)

@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     )
 
     # ── Database ────────────────────────────────────────────────────────
-    # The one database used for every read and write.
-    #   local dev  → sqlite+aiosqlite:///./vizhi.db
-    #   production → postgresql+asyncpg://... (Supabase)
-    database_url: str = "sqlite+aiosqlite:///./vizhi.db"
+    # The one PostgreSQL database (Neon) used for every read and write.
+    # Required: there is no local fallback. The Neon connection string can be
+    # pasted as-is (see app/db/session.py). Schema: `alembic upgrade head`.
+    database_url: str
 
-    # Connection pool sizing (ignored for SQLite).
+    # Connection pool sizing.
     db_pool_size: int = 5
     db_max_overflow: int = 2
     db_pool_recycle: int = 300

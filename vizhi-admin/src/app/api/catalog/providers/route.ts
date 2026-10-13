@@ -5,8 +5,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  db,
+  execute,
+  loadProvider,
   providerDict,
+  query,
+  queryOne,
   type CatalogModelRow,
   type CatalogProviderRow,
 } from "@/lib/server/db";
@@ -15,18 +18,15 @@ import { requireAdmin } from "@/lib/server/auth";
 const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 export async function GET(request: NextRequest) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
 
-  const conn = db();
-  const providers = conn
-    .prepare(
-      "SELECT * FROM catalog_providers ORDER BY sort_order, id",
-    )
-    .all() as CatalogProviderRow[];
-  const models = conn
-    .prepare("SELECT * FROM catalog_models ORDER BY sort_order, id")
-    .all() as CatalogModelRow[];
+  const providers = await query<CatalogProviderRow>(
+    "SELECT * FROM catalog_providers ORDER BY sort_order, id",
+  );
+  const models = await query<CatalogModelRow>(
+    "SELECT * FROM catalog_models ORDER BY sort_order, id",
+  );
 
   const byProvider = new Map<string, CatalogModelRow[]>();
   for (const model of models) {
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
 
   let body: Record<string, unknown>;
@@ -70,22 +70,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Label is required" }, { status: 422 });
   }
 
-  const conn = db();
-  const existing = conn
-    .prepare("SELECT id FROM catalog_providers WHERE id = ?")
-    .get(id);
+  const existing = await queryOne<{ id: string }>(
+    "SELECT id FROM catalog_providers WHERE id = $1",
+    [id],
+  );
   if (existing) {
     return NextResponse.json({ detail: "Provider id already exists" }, { status: 409 });
   }
 
-  conn
-    .prepare(
-      "INSERT INTO catalog_providers (id, label, sort_order, enabled, api_key, base_url) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .run(id, label, sortOrder, 1, apiKey, baseUrl);
+  await execute(
+    "INSERT INTO catalog_providers (id, label, sort_order, enabled, api_key, base_url) VALUES ($1, $2, $3, 1, $4, $5)",
+    [id, label, sortOrder, apiKey, baseUrl],
+  );
 
-  const row = conn
-    .prepare("SELECT * FROM catalog_providers WHERE id = ?")
-    .get(id) as CatalogProviderRow;
+  const row = (await loadProvider(id))!;
   return NextResponse.json(providerDict(row, []), { status: 201 });
 }

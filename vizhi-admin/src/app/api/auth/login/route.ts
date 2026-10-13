@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db, userDict, type UserRow } from "@/lib/server/db";
+import { queryOne, userDict, type UserRow } from "@/lib/server/db";
 import { signToken, sessionCookie } from "@/lib/server/auth";
 
 export async function POST(request: NextRequest) {
@@ -26,24 +26,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const user = db()
-    .prepare("SELECT * FROM users WHERE email = ?")
-    .get(email) as UserRow | undefined;
+  const user = await queryOne<UserRow>("SELECT * FROM users WHERE email = $1", [email]);
   if (!user) {
     return NextResponse.json({ detail: "Invalid email or password" }, { status: 401 });
   }
 
-  const account = db()
-    .prepare(
-      "SELECT password_hash FROM auth_accounts WHERE user_id = ? AND provider = 'password'",
-    )
-    .get(user.id) as { password_hash: string } | undefined;
+  const account = await queryOne<{ password_hash: string | null }>(
+    "SELECT password_hash FROM auth_accounts WHERE user_id = $1 AND provider = 'password'",
+    [user.id],
+  );
   if (!account?.password_hash) {
     return NextResponse.json({ detail: "Invalid email or password" }, { status: 401 });
   }
 
-  // bcrypt hashes are $2a$/$2b$ — verify with Node's scrypt-free path via
-  // the bcryptjs-compatible check below (pure JS, no native build).
   const ok = await verifyBcrypt(password, account.password_hash);
   if (!ok) {
     return NextResponse.json({ detail: "Invalid email or password" }, { status: 401 });
@@ -54,8 +49,8 @@ export async function POST(request: NextRequest) {
   return response;
 }
 
-// ── Minimal bcrypt verifier (pure JS, mirrors bcryptjs) ──────────────────
-// Loaded lazily so the route stays tree-shakeable.
+// bcrypt hashes are $2a$/$2b$ — verified with bcryptjs (pure JS, no native
+// build). Loaded lazily so the route stays tree-shakeable.
 async function verifyBcrypt(password: string, hash: string): Promise<boolean> {
   const { compare } = await import("bcryptjs");
   return compare(password, hash);

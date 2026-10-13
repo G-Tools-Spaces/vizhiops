@@ -33,6 +33,7 @@ import httpx
 
 from app.config.settings import settings
 from app.providers.base import ProviderResponse
+from app.providers.http_client import get_http_client
 
 
 _CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
@@ -275,7 +276,9 @@ async def _dispatch_call(
         # Admin-managed provider: both credentials come from the catalog DB
         # (passed in kwargs by DynamicProvider) — nothing lives in .env.
         api_key = kwargs.get("api_key") or ""
-        base = (kwargs.get("base_url") or "").rstrip("/")
+        # Admins may enter the base URL with or without the /v1 suffix (the
+        # admin console and health checks accept both); the path adds it.
+        base = (kwargs.get("base_url") or "").rstrip("/").removesuffix("/v1")
         if not api_key or not base:
             raise RuntimeError(
                 f"Provider '{provider_name}' has no API key / base URL "
@@ -405,7 +408,9 @@ async def _dispatch_stream(
 
     if backend == "dynamic":
         api_key = kwargs.get("api_key") or ""
-        base = (kwargs.get("base_url") or "").rstrip("/")
+        # Admins may enter the base URL with or without the /v1 suffix (the
+        # admin console and health checks accept both); the path adds it.
+        base = (kwargs.get("base_url") or "").rstrip("/").removesuffix("/v1")
         if not api_key or not base:
             raise RuntimeError(
                 f"Provider '{provider_name}' has no API key / base URL "
@@ -571,8 +576,7 @@ async def _openai_compat_call(
     provider_name: str,
 ) -> ProviderResponse:
     start = time.perf_counter_ns()
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
+    resp = await get_http_client().post(url, json=payload, headers=headers)
     latency = (time.perf_counter_ns() - start) // 1_000_000
 
     if resp.is_error:
@@ -605,18 +609,18 @@ async def _openai_compat_stream_gen(
     backend_name: str,
     model: str,
 ) -> AsyncGenerator[str, None]:
-    async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as resp:
-            if resp.is_error:
-                body = await resp.aread()
-                raise RuntimeError(
-                    f"{resp.status_code} {resp.reason_phrase} from {backend_name} "
-                    f"for model '{model}': {body.decode(errors='replace')}"
-                )
-            async for raw_line in resp.aiter_lines():
-                line = raw_line.strip()
-                if line:
-                    yield line
+    client = get_http_client()
+    async with client.stream("POST", url, json=payload, headers=headers) as resp:
+        if resp.is_error:
+            body = await resp.aread()
+            raise RuntimeError(
+                f"{resp.status_code} {resp.reason_phrase} from {backend_name} "
+                f"for model '{model}': {body.decode(errors='replace')}"
+            )
+        async for raw_line in resp.aiter_lines():
+            line = raw_line.strip()
+            if line:
+                yield line
 
 
 # ── Anthropic native backend ──────────────────────────────────────────────────
@@ -680,8 +684,7 @@ async def _anthropic_call(
     *, url: str, headers: dict, payload: dict, model: str
 ) -> ProviderResponse:
     start = time.perf_counter_ns()
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
+    resp = await get_http_client().post(url, json=payload, headers=headers)
     latency = (time.perf_counter_ns() - start) // 1_000_000
 
     if resp.is_error:
@@ -715,98 +718,98 @@ async def _anthropic_stream_gen(
     """Convert Anthropic's SSE format to OpenAI-compatible SSE format."""
     import json as _json
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as resp:
-            if resp.is_error:
-                body = await resp.aread()
-                raise RuntimeError(
-                    f"{resp.status_code} from anthropic for model '{model}': "
-                    f"{body.decode(errors='replace')}"
+    client = get_http_client()
+    async with client.stream("POST", url, json=payload, headers=headers) as resp:
+        if resp.is_error:
+            body = await resp.aread()
+            raise RuntimeError(
+                f"{resp.status_code} from anthropic for model '{model}': "
+                f"{body.decode(errors='replace')}"
+            )
+
+        response_model = model
+        chunk_index = 0
+        usage_input_tokens = 0
+        usage_output_tokens = 0
+
+        async for raw_line in resp.aiter_lines():
+            line = raw_line.strip()
+            if not line or not line.startswith("data: "):
+                continue
+
+            data_str = line[6:]
+            if data_str == "[DONE]":
+                yield "data: [DONE]"
+                break
+
+            try:
+                event = _json.loads(data_str)
+            except _json.JSONDecodeError:
+                continue
+
+            event_type = event.get("type", "")
+
+            # message_start carries model info + input token usage
+            if event_type == "message_start":
+                msg = event.get("message", {})
+                response_model = msg.get("model", model)
+                msg_usage = msg.get("usage") or {}
+                usage_input_tokens = int(msg_usage.get("input_tokens", 0) or 0)
+
+            # content_block_delta carries the actual token
+            elif event_type == "content_block_delta":
+                delta = event.get("delta", {})
+                token = delta.get("text", "")
+                if token:
+                    openai_chunk = {
+                        "id": f"anth_{chunk_index}",
+                        "object": "chat.completion.chunk",
+                        "model": response_model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"role": "assistant", "content": token},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {_json.dumps(openai_chunk)}"
+                    chunk_index += 1
+
+            # message_delta carries finish_reason + output token usage
+            elif event_type == "message_delta":
+                delta = event.get("delta", {})
+                stop_reason = delta.get("stop_reason")
+                event_usage = event.get("usage") or {}
+                usage_output_tokens = int(
+                    event_usage.get("output_tokens", 0) or usage_output_tokens
                 )
+                if stop_reason:
+                    finish_chunk = {
+                        "id": f"anth_{chunk_index}",
+                        "object": "chat.completion.chunk",
+                        "model": response_model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": stop_reason,
+                            }
+                        ],
+                        # Emit usage so the gateway can track spend for
+                        # budget enforcement on streamed Anthropic calls.
+                        "usage": {
+                            "prompt_tokens": usage_input_tokens,
+                            "completion_tokens": usage_output_tokens,
+                            "total_tokens": usage_input_tokens + usage_output_tokens,
+                        },
+                    }
+                    yield f"data: {_json.dumps(finish_chunk)}"
+                    chunk_index += 1
 
-            response_model = model
-            chunk_index = 0
-            usage_input_tokens = 0
-            usage_output_tokens = 0
-
-            async for raw_line in resp.aiter_lines():
-                line = raw_line.strip()
-                if not line or not line.startswith("data: "):
-                    continue
-
-                data_str = line[6:]
-                if data_str == "[DONE]":
-                    yield "data: [DONE]"
-                    break
-
-                try:
-                    event = _json.loads(data_str)
-                except _json.JSONDecodeError:
-                    continue
-
-                event_type = event.get("type", "")
-
-                # message_start carries model info + input token usage
-                if event_type == "message_start":
-                    msg = event.get("message", {})
-                    response_model = msg.get("model", model)
-                    msg_usage = msg.get("usage") or {}
-                    usage_input_tokens = int(msg_usage.get("input_tokens", 0) or 0)
-
-                # content_block_delta carries the actual token
-                elif event_type == "content_block_delta":
-                    delta = event.get("delta", {})
-                    token = delta.get("text", "")
-                    if token:
-                        openai_chunk = {
-                            "id": f"anth_{chunk_index}",
-                            "object": "chat.completion.chunk",
-                            "model": response_model,
-                            "choices": [
-                                {
-                                    "index": 0,
-                                    "delta": {"role": "assistant", "content": token},
-                                    "finish_reason": None,
-                                }
-                            ],
-                        }
-                        yield f"data: {_json.dumps(openai_chunk)}"
-                        chunk_index += 1
-
-                # message_delta carries finish_reason + output token usage
-                elif event_type == "message_delta":
-                    delta = event.get("delta", {})
-                    stop_reason = delta.get("stop_reason")
-                    event_usage = event.get("usage") or {}
-                    usage_output_tokens = int(
-                        event_usage.get("output_tokens", 0) or usage_output_tokens
-                    )
-                    if stop_reason:
-                        finish_chunk = {
-                            "id": f"anth_{chunk_index}",
-                            "object": "chat.completion.chunk",
-                            "model": response_model,
-                            "choices": [
-                                {
-                                    "index": 0,
-                                    "delta": {},
-                                    "finish_reason": stop_reason,
-                                }
-                            ],
-                            # Emit usage so the gateway can track spend for
-                            # budget enforcement on streamed Anthropic calls.
-                            "usage": {
-                                "prompt_tokens": usage_input_tokens,
-                                "completion_tokens": usage_output_tokens,
-                                "total_tokens": usage_input_tokens + usage_output_tokens,
-                            },
-                        }
-                        yield f"data: {_json.dumps(finish_chunk)}"
-                        chunk_index += 1
-
-                elif event_type == "message_stop":
-                    yield "data: [DONE]"
-                    break
+            elif event_type == "message_stop":
+                yield "data: [DONE]"
+                break
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

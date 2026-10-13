@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import settings
-from app.db.init_db import init_db
 from app.api.agents import router as agents_router
 from app.api.agent_queue import router as agent_queue_router
 from app.api.auth import router as auth_router
@@ -17,6 +16,7 @@ from app.api.models import router as models_router
 from app.api.queries import router as queries_router
 from app.api.metrics import router as metrics_router
 from app.api.dashboard import router as dashboard_router
+from app.providers.http_client import close_http_client
 from app.services.health_checker import (
     start_background_health_checks,
     stop_background_health_checks,
@@ -25,18 +25,21 @@ from app.services.health_checker import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle — init the database, run provider health checks."""
+    """Lifecycle — start provider health checks; close shared resources.
 
-    # 1. Create tables on the configured database
-    await init_db()
+    The database schema is owned by Alembic (`alembic upgrade head` before
+    the server starts); nothing here touches the database, so a cold start
+    does not wait on it.
+    """
 
-    # 2. Start provider health-check background loop
+    # 1. Start provider health-check background loop
     start_background_health_checks()
 
     yield
 
-    # 3. On shutdown: stop health checks
+    # 2. On shutdown: stop health checks, close the shared HTTP client
     stop_background_health_checks()
+    await close_http_client()
 
 
 app = FastAPI(

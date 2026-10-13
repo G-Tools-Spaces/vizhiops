@@ -27,3 +27,4 @@ Thumbs.db
 # Local databases
 *.db
 *.sqlite3
+.neon

@@ -8,7 +8,7 @@
 
 import crypto from "node:crypto";
 import type { NextRequest } from "next/server";
-import { db, userDict, type UserRow } from "./db";
+import { queryOne, userDict, type UserRow } from "./db";
 
 const SECRET = process.env.AUTH_JWT_SECRET ?? "change-me-in-production";
 const ISSUER = process.env.AUTH_JWT_ISSUER ?? "vizhi";
@@ -71,23 +71,19 @@ export function verifyToken(token: string): Record<string, unknown> | null {
 
 // ── Request helpers ──────────────────────────────────────────────────────
 
-export function sessionUser(request: NextRequest): UserRow | null {
+export async function sessionUser(request: NextRequest): Promise<UserRow | null> {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
   const payload = verifyToken(token);
   if (!payload) return null;
-
-  const row = db()
-    .prepare("SELECT * FROM users WHERE id = ?")
-    .get(String(payload.sub ?? "")) as UserRow | undefined;
-  return row ?? null;
+  return queryOne<UserRow>("SELECT * FROM users WHERE id = $1", [String(payload.sub ?? "")]);
 }
 
 /** Returns the admin user, or a 401/403 Response to return from the route. */
-export function requireAdmin(
+export async function requireAdmin(
   request: NextRequest,
-): { user: UserRow } | { error: Response } {
-  const user = sessionUser(request);
+): Promise<{ user: UserRow } | { error: Response }> {
+  const user = await sessionUser(request);
   if (!user) {
     return {
       error: Response.json({ detail: "Not authenticated" }, { status: 401 }),

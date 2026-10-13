@@ -8,7 +8,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db, type CatalogProviderRow } from "@/lib/server/db";
+import {
+  execute,
+  loadProvider,
+  query,
+  withTransaction,
+  type CatalogProviderRow,
+} from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
 
 type Params = { params: Promise<{ source: string }> };
@@ -31,10 +37,7 @@ function isChatModel(id: string): boolean {
 
 type FetchResult = { models: { id: string; label: string }[]; origin: string };
 
-async function fetchFromUrl(
-  url: string,
-  apiKey: string,
-): Promise<FetchResult> {
+async function fetchFromUrl(url: string, apiKey: string): Promise<FetchResult> {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}` },
     signal: AbortSignal.timeout(15_000),
@@ -49,7 +52,7 @@ async function fetchFromUrl(
   return { models, origin: "live" };
 }
 
-async function fetchModels(source: string): Promise<FetchResult> {
+async function fetchModels(source: string, provider: CatalogProviderRow | null): Promise<FetchResult> {
   // Built-in, env-keyed sources.
   if (source === "nvidia") {
     const key = process.env.NVIDIA_API_KEY ?? "";
@@ -63,9 +66,6 @@ async function fetchModels(source: string): Promise<FetchResult> {
   }
 
   // Any other source: a catalog provider with stored credentials.
-  const provider = db()
-    .prepare("SELECT * FROM catalog_providers WHERE id = ?")
-    .get(source) as CatalogProviderRow | undefined;
   if (!provider) {
     throw new Error(`Unknown sync source: ${source}`);
   }
@@ -77,11 +77,10 @@ async function fetchModels(source: string): Promise<FetchResult> {
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const auth = requireAdmin(request);
+  const auth = await requireAdmin(request);
   if ("error" in auth) return auth.error;
   const source = (await params).source;
 
-  const conn = db();
   const providerId = source;
   const label =
     source === "nvidia"
@@ -90,54 +89,53 @@ export async function POST(request: NextRequest, { params }: Params) {
         ? "🤗 Open Models (Free via HuggingFace)"
         : null;
 
-  // Built-ins are auto-created; DB-credentialed providers already exist.
-  if (label !== null) {
-    const existing = conn
-      .prepare("SELECT id FROM catalog_providers WHERE id = ?")
-      .get(providerId);
-    if (!existing) {
-      conn
-        .prepare(
-          "INSERT INTO catalog_providers (id, label, sort_order, enabled) VALUES (?, ?, ?, 1)",
-        )
-        .run(providerId, label, source === "nvidia" ? 50 : 40);
-    }
-  } else {
-    const existing = conn
-      .prepare("SELECT id FROM catalog_providers WHERE id = ?")
-      .get(providerId);
-    if (!existing) {
+  let provider = await loadProvider(providerId);
+  // Built-ins are auto-created; DB-credentialed providers must already exist.
+  if (!provider) {
+    if (label === null) {
       return NextResponse.json(
         { detail: `Unknown sync source: ${source}` },
         { status: 404 },
       );
     }
+    await execute(
+      "INSERT INTO catalog_providers (id, label, sort_order, enabled) VALUES ($1, $2, $3, 1)",
+      [providerId, label, source === "nvidia" ? 50 : 40],
+    );
+    provider = await loadProvider(providerId);
   }
 
   let models: { id: string; label: string }[] = [];
   let origin = "live";
   try {
-    ({ models, origin } = await fetchModels(source));
+    ({ models, origin } = await fetchModels(source, provider));
   } catch {
     origin = "unreachable";
   }
 
   const existing = new Set(
-    (conn
-      .prepare("SELECT id FROM catalog_models WHERE provider_id = ?")
-      .all(providerId) as { id: string }[]).map((r) => r.id),
+    (
+      await query<{ id: string }>(
+        "SELECT id FROM catalog_models WHERE provider_id = $1",
+        [providerId],
+      )
+    ).map((r) => r.id),
   );
 
-  let created = 0;
-  const insert = conn.prepare(
-    "INSERT INTO catalog_models (id, provider_id, label, sort_order, enabled) VALUES (?, ?, ?, ?, 1)",
-  );
-  models.forEach((model, order) => {
-    const modelId = `${providerId}/${model.id}`;
-    if (existing.has(modelId)) return;
-    insert.run(modelId, providerId, model.label, order);
-    created += 1;
-  });
+  const fresh = models
+    .map((model, order) => ({ id: `${providerId}/${model.id}`, label: model.label, order }))
+    .filter((m) => !existing.has(m.id));
 
-  return NextResponse.json({ source: origin, created, total: models.length });
+  if (fresh.length) {
+    await withTransaction(async (client) => {
+      for (const m of fresh) {
+        await client.query(
+          "INSERT INTO catalog_models (id, provider_id, label, sort_order, enabled) VALUES ($1, $2, $3, $4, 1)",
+          [m.id, providerId, m.label, m.order],
+        );
+      }
+    });
+  }
+
+  return NextResponse.json({ source: origin, created: fresh.length, total: models.length });
 }
