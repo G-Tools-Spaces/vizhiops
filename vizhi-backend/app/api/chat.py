@@ -148,46 +148,22 @@ async def chat_completions(
             query_id = f"q_{uuid.uuid4().hex[:12]}"
             job_id = f"j_{uuid.uuid4().hex[:12]}"
 
-            # 1. Persist QueryRow + AgentJobRow synchronously so the
-            #    response row written by complete_agent_job() always has
-            #    a matching query visible in monitoring.  The previous
-            #    fire-and-forget asyncio.create_task() could silently
-            #    fail or lose the race against the agent, leaving
-            #    "No response data" in the dashboard.
-            query_row = QueryRow(
-                id=query_id,
-                user_id=credential.user_id,
-                agent_id=credential.principal_id,
-                provider=provider_name,
-                model=resolved_model,
-                sdk_type=body.call_sdk,
-                input_messages=json.dumps(messages_raw),
-                endpoint="/v1/chat/completions",
-                timestamp=utcnow(),
-            )
-            db.add(query_row)
-
-            job_row = AgentJobRow(
-                id=job_id,
+            # 1. Persist the query + job BEFORE telling the agent. A fast agent
+            #    can submit its result within milliseconds; if the job row did
+            #    not exist yet, /jobs/submit answered "Job not found" and the
+            #    response was lost (trace showed status 0, no tokens, no body).
+            await _persist_agent_job_async(
                 query_id=query_id,
-                user_id=credential.user_id,
+                job_id=job_id,
                 agent_id=credential.principal_id,
+                user_id=credential.user_id,
                 provider=provider_name,
                 model=resolved_model,
                 sdk_type=body.call_sdk,
-                endpoint="/v1/chat/completions",
-                kind="chat",
-                input_payload=json.dumps({"messages": messages_raw}),
-                stream=False,
-                metadata_=json.dumps({"source": "chat-gateway"}),
-                status="running",
-                attempt_count=1,
+                messages=messages_raw,
             )
-            db.add(job_row)
-            await db.commit()
 
-            # 2. Notify agent AFTER the DB commit so the rows are
-            #    guaranteed to exist when the agent completes the job.
+            # 2. Notify the agent.
             try:
                 await agent_ws_manager.notify(
                     credential.principal_id,
@@ -206,7 +182,7 @@ async def chat_completions(
             except Exception as exc:
                 logger.warning(f"Failed to notify agent via websocket: {exc}")
 
-            # 3. Wait for result
+            # 3. Wait for the agent to submit its result.
             return await _wait_for_agent_result(
                 query_id=query_id,
                 job_id=job_id,
@@ -587,6 +563,60 @@ async def _persist_response_async(
             await db.commit()
     except Exception as exc:
         logger.error("Failed to persist response for query %s: %s", query_id, exc)
+
+
+async def _persist_agent_job_async(
+    *,
+    query_id: str,
+    job_id: str,
+    agent_id: str,
+    user_id: str | None,
+    provider: str,
+    model: str,
+    sdk_type: str | None,
+    messages: list[dict],
+) -> None:
+    """Persist the query and its agent job in one transaction.
+
+    Raises on failure: without the job row the agent's result cannot be
+    stored, so the request must fail instead of waiting for a timeout.
+    """
+    now = utcnow()
+    async with async_session_factory() as db:
+        db.add(
+            QueryRow(
+                id=query_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                provider=provider,
+                model=model,
+                sdk_type=sdk_type,
+                input_messages=json.dumps(messages),
+                endpoint="/v1/chat/completions",
+                timestamp=now,
+            )
+        )
+        db.add(
+            AgentJobRow(
+                id=job_id,
+                query_id=query_id,
+                user_id=user_id,
+                agent_id=agent_id,
+                provider=provider,
+                model=model,
+                sdk_type=sdk_type,
+                endpoint="/v1/chat/completions",
+                kind="chat",
+                input_payload=json.dumps({"messages": messages}),
+                stream=False,
+                metadata_=json.dumps({"source": "chat-gateway"}),
+                status="running",  # pushed straight to the agent, never queued
+                attempt_count=1,
+                created_at=now,
+            )
+        )
+        await db.commit()
+    logger.info(f"Persisted agent job {job_id} for query {query_id}")
 
 
 async def _wait_for_agent_result(

@@ -191,6 +191,9 @@ class CatalogProviderRow(Base):
     # key or code change required.
     api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Wire format the gateway speaks to this provider: "openai", "anthropic",
+    # "gemini" or "azure-openai". NULL → the built-in's own, else "openai".
+    adapter: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[_dt.datetime] = mapped_column(
         DateTime, server_default=func.now()
     )

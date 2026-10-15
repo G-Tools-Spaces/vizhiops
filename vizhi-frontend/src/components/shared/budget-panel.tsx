@@ -49,9 +49,9 @@ function ProgressBar({ value, exceeded }: { value: number; exceeded: boolean }) 
     ? "bg-[var(--warn)]"
     : "bg-[var(--ok)]";
   return (
-    <div className="w-full h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
+    <div className="h-1 w-full overflow-hidden bg-[var(--line-soft)]">
       <div
-        className={`h-full rounded-full transition-all ${color}`}
+        className={`h-full transition-all ${color}`}
         style={{ width: `${value}%` }}
       />
     </div>
@@ -153,7 +153,7 @@ function BudgetForm({
             placeholder="e.g. 5.00 (leave blank = unlimited)"
             value={usdStr}
             onChange={(e) => setUsdStr(e.target.value)}
-            className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="h-9 border border-[var(--line-strong)] bg-[var(--canvas)] px-2.5 text-[13px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-tertiary)] focus:border-[var(--brand-hover)]"
           />
         </label>
         <label className="flex flex-col gap-1">
@@ -165,7 +165,7 @@ function BudgetForm({
             placeholder="e.g. 100000 (leave blank = unlimited)"
             value={tokStr}
             onChange={(e) => setTokStr(e.target.value)}
-            className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            className="h-9 border border-[var(--line-strong)] bg-[var(--canvas)] px-2.5 text-[13px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-tertiary)] focus:border-[var(--brand-hover)]"
           />
         </label>
       </div>
@@ -178,7 +178,7 @@ function BudgetForm({
           type="datetime-local"
           value={resetAt ? resetAt.slice(0, 16) : ""}
           onChange={(e) => setResetAt(e.target.value ? e.target.value + ":00Z" : "")}
-          className="rounded border border-[var(--line)] bg-[var(--panel)] text-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          className="h-9 border border-[var(--line-strong)] bg-[var(--canvas)] px-2.5 text-[13px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-tertiary)] focus:border-[var(--brand-hover)]"
         />
         <span className="text-[10px] text-[var(--ink-tertiary)]">
           After this date/time the spent counter resets to zero.
@@ -186,7 +186,7 @@ function BudgetForm({
       </label>
 
       <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={handleSave} disabled={isSaving}>
+        <Button size="sm" variant="primary" onClick={handleSave} disabled={isSaving}>
           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save limits"}
         </Button>
         {hasLimits && (
@@ -260,7 +260,7 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
   };
 
   return (
-    <div className="mt-2 ml-2 mr-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 shadow-sm">
+    <div className="border-l-2 border-[var(--brand-hover)] bg-[var(--panel)] px-[18px] py-4">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
@@ -284,7 +284,7 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
           )}
           <button
             onClick={onClose}
-            className="rounded p-0.5 hover:bg-[var(--surface-strong)] transition-colors"
+            className="p-0.5 hover:bg-[var(--surface-strong)] transition-colors"
             title="Close"
           >
             <X className="h-4 w-4 text-[var(--ink-tertiary)]" />
@@ -294,7 +294,7 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
 
       {/* Body */}
       {alertState === "exceeded" && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+        <div className="mb-3 flex items-start gap-2 border border-[var(--danger-border)] bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             <span className="font-medium">Budget exceeded.</span> This token has spent past its
@@ -303,7 +303,7 @@ export function BudgetPanel({ type, id, label, onClose }: BudgetPanelProps) {
         </div>
       )}
       {alertState === "warning" && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-[var(--warn)]/30 bg-[var(--warn-soft)] p-3 text-xs text-[var(--warn)]">
+        <div className="mb-3 flex items-start gap-2 border border-[var(--warn-border)] bg-[var(--warn-soft)] p-3 text-xs text-[var(--warn)]">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <p>
             <span className="font-medium">Approaching limit — {worstPct}% used.</span> Consider

@@ -23,6 +23,7 @@ from app.providers.openai import OpenAIProvider
 from app.providers.qwen import QwenProvider
 from app.providers.huggingface import HuggingFaceProvider
 from app.providers.nvidia import NvidiaProvider
+from app.providers.provider_config import LEGACY_HF_PREFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,11 @@ _PROVIDERS: dict[str, type[BaseProvider]] = {
     "hf": HuggingFaceProvider,
     "nvidia": NvidiaProvider,
     "nim": NvidiaProvider,
-    # Legacy named open-model providers — all route to HuggingFace
-    "llama": HuggingFaceProvider,
-    "mistral": HuggingFaceProvider,
-    "deepseek": HuggingFaceProvider,
+    "claude": AnthropicProvider,
 }
+# Legacy named open-model prefixes ("llama/…", "mistral/…", "deepseek/…") are
+# not in _PROVIDERS: they are served by DynamicProvider, which uses a console
+# provider of that id when one exists and HuggingFace otherwise.
 
 # ── SDK → provider heuristic ───────────────────────────────────────────
 
@@ -210,9 +211,9 @@ def _get_provider(name: str) -> BaseProvider:
     """Return a cached provider instance.
 
     Unknown providers fall back to :class:`DynamicProvider`, which serves any
-    provider whose API key + base URL were set in the admin console (stored
-    in ``catalog_providers``). This is what makes admin-added providers
-    callable without code changes.
+    provider configured in the admin console (``catalog_providers``: key,
+    base URL and adapter). This is what makes admin-added providers callable
+    without code changes.
     """
     if name not in _instances:
         cls = _PROVIDERS.get(name)
@@ -320,7 +321,11 @@ class ProviderRouter:
         if "/" in model:
             parts = model.split("/", 1)
             candidate = parts[0].lower()
-            if candidate in _PROVIDERS or await _is_catalog_provider(candidate):
+            if (
+                candidate in _PROVIDERS
+                or candidate in LEGACY_HF_PREFIXES
+                or await _is_catalog_provider(candidate)
+            ):
                 provider_name = candidate
                 model_name = parts[1]
 

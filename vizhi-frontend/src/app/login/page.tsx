@@ -3,12 +3,10 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Radar } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { setCurrentUser } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FieldError, Input, Label } from "@/components/ui/field";
+import { FieldError } from "@/components/ui/field";
 
 declare global {
   interface Window {
@@ -30,33 +28,11 @@ const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const googleInitialized = useRef(false);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const session =
-        mode === "signup"
-          ? await api.signup({ email, password, name })
-          : await api.login({ email, password });
-      setCurrentUser(session.user);
-      router.replace("/dashboard");
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Authentication failed");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const handleGoogleCredential = useCallback(
     async (response: { credential?: string }) => {
@@ -91,7 +67,9 @@ export default function LoginPage() {
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: "filled_black",
         size: "large",
-        width: 360,
+        shape: "rectangular",
+        text: "continue_with",
+        width: 320,
       });
       googleInitialized.current = true;
     } catch (err) {
@@ -113,74 +91,38 @@ export default function LoginPage() {
         strategy="afterInteractive"
         onLoad={initializeGoogle}
       />
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-4">
+      <Card className="w-full max-w-[400px]">
+        <CardHeader className="py-5">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--brand)] text-[var(--brand-ink)]">
-              <Radar className="h-5 w-5" />
+            <span className="flex h-[34px] w-[34px] items-center justify-center bg-[var(--brand)] text-[13px] font-bold text-[var(--brand-ink)]">
+              V
             </span>
             <div>
-              <CardTitle className="text-lg">Vizhi</CardTitle>
-              <p className="text-sm text-[var(--ink-tertiary)]">Sign in to the control plane</p>
+              <CardTitle className="text-base">Vizhi</CardTitle>
+              <p className="text-xs text-[var(--ink-tertiary)]">Sign in to the control plane</p>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={submit}>
-            {mode === "signup" ? (
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Gopinath" />
+        <CardContent className="space-y-4 py-6">
+          {googleClientId ? (
+            <>
+              <p className="text-center text-[13px] text-[var(--ink-secondary)]">
+                Continue with your Google account. New accounts are created on first sign-in.
+              </p>
+              {/* Google's iframe is light-scheme; inside our dark page the browser
+                  paints it an opaque white backdrop. Matching the scheme here
+                  keeps it transparent, so only the button's own border shows. */}
+              <div className="flex min-h-[44px] justify-center [color-scheme:light]">
+                <div ref={googleButtonRef} />
               </div>
-            ) : null}
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="dev@company.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Password</Label>
-              <div className="relative">
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Minimum 8 characters"
-                  className="pr-10"
-                  minLength={mode === "signup" ? 8 : 1}
-                  required
-                />
-                <Eye className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--ink-tertiary)]" />
-              </div>
-            </div>
-            <FieldError message={error} />
-            <Button className="w-full" variant="primary" type="submit" disabled={loading}>
-              {loading ? "Working..." : mode === "signup" ? "Create Account" : "Login"}
-            </Button>
-          </form>
-          <div className="my-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
-            <span className="text-xs text-[var(--ink-tertiary)] font-medium">OR</span>
-            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
-          </div>
-          <div className="flex justify-center">
-            <div ref={googleButtonRef} />
-          </div>
-          <button
-            type="button"
-            className="mt-5 block w-full text-center text-sm text-[var(--ink-secondary)] transition hover:text-[var(--ink)]"
-            onClick={() => {
-              setError("");
-              setMode(mode === "login" ? "signup" : "login");
-            }}
-          >
-            {mode === "login" ? "Create an email password account" : "I already have an account"}
-          </button>
+              {loading ? <p className="text-center text-xs text-[var(--ink-tertiary)]">Signing in…</p> : null}
+            </>
+          ) : (
+            <p className="border border-[var(--warn-border)] bg-[var(--warn-soft)] px-3 py-2.5 text-xs text-[var(--warn)]">
+              Google sign-in is not configured. Set <code className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> and restart the frontend.
+            </p>
+          )}
+          <FieldError message={error} />
         </CardContent>
       </Card>
     </main>

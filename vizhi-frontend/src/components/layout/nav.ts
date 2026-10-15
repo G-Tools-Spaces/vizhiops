@@ -42,3 +42,21 @@ export const navSections: NavSection[] = [
     ],
   },
 ];
+
+const allItems = navSections.flatMap((section) => section.items);
+
+/** The nav entry a route belongs to: longest href that prefixes the path. */
+export function activeNavHref(pathname: string): string | undefined {
+  return allItems
+    .map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+/** Breadcrumb label for any route, including detail pages. */
+export function pageLabel(pathname: string): string {
+  if (pathname.startsWith("/traces/")) return "Request Trace";
+  if (/^\/models\/tokens\/[^/]+/.test(pathname)) return "Model Usage";
+  const href = activeNavHref(pathname);
+  return allItems.find((item) => item.href === href)?.label ?? "Dashboard";
+}

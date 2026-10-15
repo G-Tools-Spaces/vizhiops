@@ -1,27 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Activity,
-  AlertTriangle,
-  Clock,
-  DollarSign,
-  Gauge,
-  Layers,
-  TrendingUp,
-  CheckCircle,
-  AlertCircle,
-} from "lucide-react";
+import { Activity, AlertTriangle, Clock, DollarSign, Layers, TrendingUp } from "lucide-react";
 import { RequestTimeline, TokenTimeline } from "@/components/shared/chart-panel";
-import { MetricCard } from "@/components/shared/metric-card";
+import { DataTable } from "@/components/shared/data-table";
+import { KpiGrid, MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Label, Select } from "@/components/ui/field";
 import { useAgents, useMetrics, useModels } from "@/lib/api/queries";
 import { useUiStore } from "@/stores/ui-store";
-import { formatCurrency, formatNumber } from "@/lib/utils";
+import { cn, formatCurrency, formatDateTime, formatNumber } from "@/lib/utils";
+
+const RANGES = [
+  { id: "1h", label: "1h" },
+  { id: "24h", label: "24h" },
+  { id: "7d", label: "7d" },
+  { id: "30d", label: "30d" },
+] as const;
 
 export default function MonitoringPage() {
   const store = useUiStore();
@@ -35,233 +31,160 @@ export default function MonitoringPage() {
     modelId: store.selectedModelId,
   });
 
+  const series = data?.metricSeries ?? [];
   const requests = data?.requests ?? [];
-  const totalRequests = (data?.metricSeries ?? []).reduce((sum, point) => sum + point.requests, 0);
-  const totalErrors = (data?.metricSeries ?? []).reduce((sum, point) => sum + point.errors, 0);
-  const totalTokens = (data?.metricSeries ?? []).reduce(
-    (sum, point) => sum + point.inputTokens + point.outputTokens,
-    0
-  );
-  const nonEmptyBuckets = (data?.metricSeries ?? []).filter((p) => p.requests > 0);
+  const totalRequests = series.reduce((sum, point) => sum + point.requests, 0);
+  const totalErrors = series.reduce((sum, point) => sum + point.errors, 0);
+  const totalTokens = series.reduce((sum, point) => sum + point.inputTokens + point.outputTokens, 0);
+  const nonEmptyBuckets = series.filter((p) => p.requests > 0);
   const avgLatency = Math.round(
-    nonEmptyBuckets.reduce((sum, point) => sum + point.latency, 0) /
-      Math.max(nonEmptyBuckets.length, 1)
+    nonEmptyBuckets.reduce((sum, point) => sum + point.latency, 0) / Math.max(nonEmptyBuckets.length, 1),
   );
   // Compute cost from actual request list for accuracy
   const cost = requests.reduce((sum, r) => sum + (r.estimatedCost ?? 0), 0);
+  const failureRate = Math.round((totalErrors / Math.max(totalRequests, 1)) * 100);
 
-  // Resolve agent name: request.agentId holds the agent CID — match on agent.cid
+  // request.agentId holds the agent CID — match on agent.cid
   const agentByCid = (cid: string) => agents.find((a) => a.cid === cid)?.name ?? cid;
-
-  // Derive unique providers from the fetched models for the provider dropdown
-  const providers = Array.from(new Set(models.map((m) => m.provider)));
+  // Unique model names: several tokens can point at the same model.
+  const modelNames = Array.from(new Set(models.map((m) => m.modelName)));
 
   return (
     <>
       <PageHeader
         title="Monitoring"
-        description="Deep observability for requests, latency, token consumption, provider distribution, errors, agent analytics, and model analytics."
+        description="Requests, latency, tokens, cost and errors — filter by time, agent and model."
       />
 
-      {/* Filter Bar */}
-      <section className="mb-6 grid gap-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 md:grid-cols-5">
-        <div className="space-y-2">
-          <Label>Time Range</Label>
-          <Select
-            value={store.timeRange}
-            onChange={(e) => store.setTimeRange(e.target.value as typeof store.timeRange)}
-          >
-            <option value="1h">Last hour</option>
-            <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </Select>
+      {/* Filters */}
+      <section className="mb-6 flex flex-wrap items-end gap-4 border border-[var(--line)] bg-[var(--panel)] px-[18px] py-3.5">
+        <div className="space-y-1.5">
+          <Label>Time range</Label>
+          <div role="group" aria-label="Time range" className="flex border border-[var(--line-strong)]">
+            {RANGES.map((range, i) => (
+              <button
+                key={range.id}
+                type="button"
+                aria-pressed={store.timeRange === range.id}
+                onClick={() => store.setTimeRange(range.id)}
+                className={cn(
+                  "h-[34px] px-3.5 text-xs font-semibold transition-colors",
+                  i > 0 && "border-l border-[var(--line-strong)]",
+                  store.timeRange === range.id
+                    ? "bg-[var(--chip)] text-[var(--ink)]"
+                    : "bg-[var(--surface)] text-[var(--ink-tertiary)] hover:text-[var(--ink)]",
+                )}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="space-y-2">
+        <div className="min-w-52 flex-1 space-y-1.5 sm:max-w-64">
           <Label>Agent</Label>
-          <Select
-            value={store.selectedAgentId}
-            onChange={(e) => store.setSelectedAgentId(e.target.value)}
-          >
+          <Select value={store.selectedAgentId} onChange={(e) => store.setSelectedAgentId(e.target.value)}>
             <option value="all">All agents</option>
             {agents.map((agent) => (
               <option key={agent.cid} value={agent.cid}>
-                {agent.name}
+                {agent.name} · {agent.cid}
               </option>
             ))}
           </Select>
         </div>
-        <div className="space-y-2">
+        <div className="min-w-52 flex-1 space-y-1.5 sm:max-w-64">
           <Label>Model</Label>
-          <Select
-            value={store.selectedModelId}
-            onChange={(e) => store.setSelectedModelId(e.target.value)}
-          >
+          <Select value={store.selectedModelId} onChange={(e) => store.setSelectedModelId(e.target.value)}>
             <option value="all">All models</option>
-            {models.map((model) => (
-              <option key={model.id} value={model.modelName}>
-                {model.modelName}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Provider</Label>
-          <Select defaultValue="all">
-            <option value="all">All providers</option>
-            {providers.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>CID</Label>
-          <Select defaultValue="all">
-            <option value="all">All CIDs</option>
-            {agents.map((agent) => (
-              <option key={agent.cid} value={agent.cid}>
-                {agent.cid}
+            {modelNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </Select>
         </div>
       </section>
 
-      {/* Metric Cards */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <KpiGrid>
         <MetricCard label="Requests" value={formatNumber(totalRequests)} hint="Gateway traffic" icon={Activity} />
+        <MetricCard label="Success rate" value={`${100 - failureRate}%`} hint="2xx responses" icon={TrendingUp} />
         <MetricCard
-          label="Success Rate"
-          value={`${Math.round((1 - totalErrors / Math.max(totalRequests, 1)) * 100)}%`}
-          hint="2xx responses"
-          icon={TrendingUp}
-        />
-        <MetricCard
-          label="Failure Rate"
-          value={`${Math.round((totalErrors / Math.max(totalRequests, 1)) * 100)}%`}
+          label="Failure rate"
+          value={`${failureRate}%`}
           hint="4xx and 5xx"
           icon={AlertTriangle}
+          tone={failureRate > 0 ? "danger" : undefined}
         />
-        <MetricCard label="Latency" value={`${avgLatency}ms`} hint="Mean response time" icon={Clock} />
+        <MetricCard label="Avg latency" value={`${avgLatency}ms`} hint="Mean response time" icon={Clock} />
         <MetricCard label="Tokens" value={formatNumber(totalTokens)} hint="Input + output" icon={Layers} />
         <MetricCard label="Cost" value={formatCurrency(cost)} hint="Estimated" icon={DollarSign} />
-      </section>
+      </KpiGrid>
 
-      {/* Charts */}
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
-        <RequestTimeline data={data?.metricSeries ?? []} />
-        <TokenTimeline data={data?.metricSeries ?? []} />
+        <RequestTimeline data={series} />
+        <TokenTimeline data={series} />
       </section>
 
-      {/* Request History — rich query cards like model tokens page */}
       <section className="mt-6">
-        <h2 className="text-xl font-semibold mb-4">Request History</h2>
-        {requests.length === 0 ? (
-          <Card className="p-8 text-center text-[var(--ink-tertiary)]">
-            No requests found for the selected filters.
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {requests.map((request) => (
-              <Card
-                key={request.id}
-                className="p-4 border border-[var(--line)] hover:border-[var(--accent)] transition-colors"
+        <DataTable
+          title="Request history"
+          tableId="monitoring-requests"
+          emptyMessage="No requests for the selected filters."
+          defaultHidden={["Endpoint", "Response"]}
+          headers={[
+            "Time",
+            "Request ID",
+            "Agent",
+            "Model",
+            "Status",
+            "Latency",
+            "Input",
+            "Output",
+            "Cost",
+            "Endpoint",
+            "Prompt",
+            "Response",
+          ]}
+          rows={requests.map((request) => {
+            const prompt = request.prompt ?? [];
+            const lastUser = [...prompt].reverse().find((m) => m.role === "user") ?? prompt[prompt.length - 1];
+            return [
+              <span key="time" className="whitespace-nowrap font-mono text-xs text-[var(--ink-secondary)]">
+                {formatDateTime(request.timestamp)}
+              </span>,
+              <Link
+                key="id"
+                href={`/traces/${request.id}`}
+                className="font-mono text-xs text-[var(--accent)] hover:text-[var(--accent-hover)]"
               >
-                {/* Header row */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <span className="text-xs font-mono text-[var(--ink-tertiary)]">{request.id}</span>
-                      <StatusBadge status={request.status < 300 ? "active" : "error"} />
-                      <span className="text-xs text-[var(--ink-tertiary)]">
-                        {new Date(request.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-[var(--ink-tertiary)]">
-                      <span>
-                        <span className="font-semibold">Agent:</span>{" "}
-                        {agentByCid(request.agentId)}
-                      </span>
-                      <span>
-                        <span className="font-semibold">Model:</span> {request.modelId}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Gauge className="h-3 w-3" />
-                        {request.latencyMs}ms
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0 ml-4">
-                    <div className="text-sm font-semibold text-[var(--ink)]">
-                      ${(request.estimatedCost ?? 0).toFixed(4)}
-                    </div>
-                    <div className="text-xs text-[var(--ink-tertiary)]">
-                      {formatNumber(request.inputTokens + request.outputTokens)} tokens
-                    </div>
-                    <Button size="sm" className="mt-2">
-                      <Link href={`/traces/${request.id}`}>View Trace</Link>
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Prompt */}
-                <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">PROMPT:</div>
-                  <div className="bg-[var(--background-secondary,#1a1a2e)] rounded p-3 text-sm max-h-32 overflow-y-auto">
-                    {(request.prompt ?? []).length > 0 ? (
-                      (request.prompt ?? []).map((msg, idx) => (
-                        <div key={idx} className="mb-2 last:mb-0">
-                          <span className="font-semibold text-[var(--accent)]">{msg.role}:</span>{" "}
-                          <span className="text-[var(--ink)]">{msg.content}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-[var(--ink-tertiary)]">No prompt data</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Response */}
-                <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">RESPONSE:</div>
-                  <div className="bg-[var(--background-secondary,#1a1a2e)] rounded p-3 text-sm max-h-32 overflow-y-auto">
-                    {request.errorMessage ? (
-                      <span className="text-[var(--danger)]">{request.errorMessage}</span>
-                    ) : request.responseText ? (
-                      <span className="text-[var(--ink)]">{request.responseText}</span>
-                    ) : (
-                      <span className="text-[var(--ink-tertiary)]">No response data</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Token breakdown */}
-                <div className="flex items-center gap-4 text-xs text-[var(--ink-tertiary)]">
-                  {request.status < 300 ? (
-                    <CheckCircle className="h-3 w-3 text-[var(--ok)]" />
-                  ) : (
-                    <AlertCircle className="h-3 w-3 text-[var(--danger)]" />
-                  )}
-                  <span>
-                    <span className="font-semibold">Input:</span>{" "}
-                    {formatNumber(request.inputTokens)} tokens
-                  </span>
-                  <span>
-                    <span className="font-semibold">Output:</span>{" "}
-                    {formatNumber(request.outputTokens)} tokens
-                  </span>
-                  <span>
-                    <span className="font-semibold">Total:</span>{" "}
-                    {formatNumber(request.inputTokens + request.outputTokens)} tokens
-                  </span>
-                  <span className="font-mono text-xs text-[var(--ink-tertiary)]">{request.endpoint}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+                {request.id}
+              </Link>,
+              agentByCid(request.agentId),
+              request.modelId,
+              request.status === 0 ? (
+              <StatusBadge key="status" status="archived" label="No response" />
+            ) : (
+              <StatusBadge key="status" status={request.status < 300 ? "active" : "error"} label={String(request.status)} />
+            ),
+              `${request.latencyMs}ms`,
+              formatNumber(request.inputTokens),
+              formatNumber(request.outputTokens),
+              `$${(request.estimatedCost ?? 0).toFixed(4)}`,
+              <span key="endpoint" className="font-mono text-xs">{request.endpoint}</span>,
+              <span key="prompt" className="block max-w-[280px] truncate" title={lastUser?.content}>
+                {lastUser?.content ?? "—"}
+              </span>,
+              request.errorMessage ? (
+                <span key="response" className="block max-w-[280px] truncate text-[var(--danger)]" title={request.errorMessage}>
+                  {request.errorMessage}
+                </span>
+              ) : (
+                <span key="response" className="block max-w-[280px] truncate" title={request.responseText}>
+                  {request.responseText || "—"}
+                </span>
+              ),
+            ];
+          })}
+        />
       </section>
     </>
   );

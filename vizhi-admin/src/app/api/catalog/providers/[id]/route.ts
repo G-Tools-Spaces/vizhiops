@@ -1,5 +1,5 @@
 /**
- * PATCH  /api/catalog/providers/:id — update label/order/enabled/credentials.
+ * PATCH  /api/catalog/providers/:id — update label/order/enabled/credentials/adapter.
  * DELETE /api/catalog/providers/:id — delete provider and its models.
  */
 
@@ -12,6 +12,7 @@ import {
   withTransaction,
 } from "@/lib/server/db";
 import { requireAdmin } from "@/lib/server/auth";
+import { ADAPTERS, isAdapterId } from "@/lib/providers";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -47,10 +48,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     body.base_url !== undefined
       ? String(body.base_url).trim().replace(/\/+$/, "") || null
       : row.base_url;
+  // Empty string resets to the default (the built-in's own, else OpenAI).
+  const adapter =
+    body.adapter !== undefined ? String(body.adapter ?? "").trim() || null : row.adapter;
+  if (adapter !== null && !isAdapterId(adapter)) {
+    return NextResponse.json(
+      { detail: `Adapter must be one of: ${ADAPTERS.map((a) => a.id).join(", ")}` },
+      { status: 422 },
+    );
+  }
 
   await execute(
-    "UPDATE catalog_providers SET label = $1, sort_order = $2, enabled = $3, api_key = $4, base_url = $5, updated_at = NOW() WHERE id = $6",
-    [label, sortOrder, enabled, apiKey, baseUrl, id],
+    "UPDATE catalog_providers SET label = $1, sort_order = $2, enabled = $3, api_key = $4, base_url = $5, adapter = $6, updated_at = NOW() WHERE id = $7",
+    [label, sortOrder, enabled, apiKey, baseUrl, adapter, id],
   );
 
   const [updated, models] = await Promise.all([loadProvider(id), loadModels(id)]);
