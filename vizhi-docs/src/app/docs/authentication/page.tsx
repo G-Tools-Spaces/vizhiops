@@ -28,7 +28,7 @@ export default function AuthenticationPage() {
           }}
         />
         <P>
-          Every token begins with <C>vk_</C>. That prefix is not decoration: it
+          Every token begins with <C>vz_live_</C>. That prefix is not decoration: it
           is how Vizhi tells a machine credential from a session, so a leaked
           gateway token can never be replayed as a browser session, and vice
           versa.
@@ -96,11 +96,12 @@ await fetch("${API_BASE_URL}${API_PREFIX}/auth/login", {
         <ResponseBlock
           json={`{
   "user": {
-    "id": "u_9f3c1d2e",
+    "id": "usr_9f3c1d2e4a5b",
     "email": "you@example.com",
     "email_verified": false,
     "name": "You",
-    "avatar_url": ""
+    "avatar_url": "",
+    "role": "user"
   }
 }`}
         />

@@ -12,7 +12,7 @@ const AGENT = `{
   "token_name": "Production",
   "tags": ["support", "prod"],
   "status": "active",
-  "masked_key": "vk_…9f3c",
+  "masked_key": "vz_live_…9f3c",
   "last_used_at": "2026-09-25T06:12:41.000000",
   "created_at": "2026-09-20T17:02:11.000000",
   "updated_at": "2026-09-24T09:40:03.000000"
@@ -29,7 +29,7 @@ export default function AgentsPage() {
 
       <Callout title="Console session required">
         Agents are managed by a signed-in person. Creating, updating, rotating
-        and budgeting all need the console session cookie — a <C>vk_</C> token
+        and budgeting all need the console session cookie — a <C>vz_live_</C> token
         cannot manage credentials.
       </Callout>
 
@@ -76,7 +76,7 @@ export default function AgentsPage() {
           status={201}
           json={`{
   "agent": ${AGENT},
-  "api_key": "vk_9f3c1d2e4a5b6c7d8e9f0a1b2c3d4e5f"
+  "api_key": "vz_live_9f3c1d2e4a5b6c7d8e9f0a1b2c3d4e5f"
 }`}
         />
       </Section>
@@ -146,7 +146,7 @@ export default function AgentsPage() {
         <ResponseBlock
           json={`{
   "agent": ${AGENT},
-  "api_key": "vk_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
+  "api_key": "vz_live_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
 }`}
         />
       </Section>

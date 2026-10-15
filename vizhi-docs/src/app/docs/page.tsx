@@ -64,7 +64,7 @@ export default function OverviewPage() {
         <Ul>
           <li>
             A <strong className="font-medium text-ink">gateway token</strong> — a
-            bearer token prefixed <C>vk_</C>, issued to a model token or an
+            bearer token prefixed <C>vz_live_</C>, issued to a model token or an
             agent. This is what calls <C>POST /chat/completions</C>.
           </li>
           <li>

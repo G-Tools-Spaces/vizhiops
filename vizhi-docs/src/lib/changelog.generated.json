@@ -1,5 +1,59 @@
 [
   {
+    "date": "2026-10-13T18:27:21.761Z",
+    "version": "1.0.0",
+    "baseline": false,
+    "added": [],
+    "removed": [
+      {
+        "method": "GET",
+        "path": "/v1/admin/catalog/providers",
+        "summary": "List Providers"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/admin/catalog/providers",
+        "summary": "Create Provider"
+      },
+      {
+        "method": "PATCH",
+        "path": "/v1/admin/catalog/providers/{provider_id}",
+        "summary": "Update Provider"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/admin/catalog/providers/{provider_id}",
+        "summary": "Delete Provider"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/admin/catalog/providers/{provider_id}/models",
+        "summary": "Create Model"
+      },
+      {
+        "method": "PATCH",
+        "path": "/v1/admin/catalog/models/{model_id}",
+        "summary": "Update Model"
+      },
+      {
+        "method": "DELETE",
+        "path": "/v1/admin/catalog/models/{model_id}",
+        "summary": "Delete Model"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/admin/catalog/sync-nvidia",
+        "summary": "Sync Nvidia Models"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/admin/catalog/sync-huggingface",
+        "summary": "Sync Huggingface Models"
+      }
+    ],
+    "changed": []
+  },
+  {
     "date": "2026-10-11T12:35:30.284Z",
     "version": "1.0.0",
     "baseline": false,

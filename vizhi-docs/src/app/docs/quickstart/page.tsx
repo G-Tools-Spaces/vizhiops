@@ -45,9 +45,9 @@ export default function QuickstartPage() {
     "provider": "openai",
     "model_name": "openai/gpt-4o-mini",
     "status": "active",
-    "masked_key": "vk_…9f3c"
+    "masked_key": "vz_live_…9f3c"
   },
-  "api_key": "vk_9f3c1d2e…"
+  "api_key": "vz_live_9f3c1d2e…"
 }`}
         />
         <Callout tone="warn" title="This is a one-way door">

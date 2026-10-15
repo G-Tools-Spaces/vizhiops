@@ -12,7 +12,7 @@ const MODEL_CONNECTION = `{
   "status": "active",
   "metadata": null,
   "usage_count": 142,
-  "masked_key": "vk_…9f3c",
+  "masked_key": "vz_live_…9f3c",
   "last_used_at": "2026-09-25T06:12:41.000000",
   "created_at": "2026-09-20T17:02:11.000000"
 }`;
@@ -30,7 +30,7 @@ export default function ModelsPage() {
       <Callout title="Console session required">
         Model tokens are managed by a signed-in person, not by a gateway token.
         Creating, listing, rotating and budgeting all need the console session
-        cookie — a <C>vk_</C> token cannot manage credentials.
+        cookie — a <C>vz_live_</C> token cannot manage credentials.
       </Callout>
 
       <Section title="Create a model token">
@@ -96,7 +96,7 @@ export default function ModelsPage() {
           status={201}
           json={`{
   "model_connection": ${MODEL_CONNECTION},
-  "api_key": "vk_9f3c1d2e4a5b6c7d8e9f0a1b2c3d4e5f"
+  "api_key": "vz_live_9f3c1d2e4a5b6c7d8e9f0a1b2c3d4e5f"
 }`}
         />
       </Section>
@@ -188,7 +188,7 @@ export default function ModelsPage() {
         <ResponseBlock
           json={`{
   "model_connection": ${MODEL_CONNECTION},
-  "api_key": "vk_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
+  "api_key": "vz_live_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"
 }`}
         />
       </Section>
