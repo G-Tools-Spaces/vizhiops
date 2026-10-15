@@ -67,6 +67,8 @@ export default function LoginPage() {
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: "filled_black",
         size: "large",
+        shape: "rectangular",
+        text: "continue_with",
         width: 320,
       });
       googleInitialized.current = true;
@@ -107,7 +109,10 @@ export default function LoginPage() {
               <p className="text-center text-[13px] text-[var(--ink-secondary)]">
                 Continue with your Google account. New accounts are created on first sign-in.
               </p>
-              <div className="flex min-h-[44px] justify-center">
+              {/* Google's iframe is light-scheme; inside our dark page the browser
+                  paints it an opaque white backdrop. Matching the scheme here
+                  keeps it transparent, so only the button's own border shows. */}
+              <div className="flex min-h-[44px] justify-center [color-scheme:light]">
                 <div ref={googleButtonRef} />
               </div>
               {loading ? <p className="text-center text-xs text-[var(--ink-tertiary)]">Signing in…</p> : null}
