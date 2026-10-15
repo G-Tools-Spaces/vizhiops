@@ -23,7 +23,7 @@ export default function ModelUsageDetailPage() {
   if (error || !data) {
     return (
       <div className="border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-3 text-[13px] text-[var(--danger)]">
-        Failed to load model usage details.
+        Failed to load model usage details{error instanceof Error ? `: ${error.message}` : "."}
       </div>
     );
   }
@@ -91,7 +91,11 @@ export default function ModelUsageDetailPage() {
                 {query.queryId}
               </Link>,
               <span key="agent" className="font-mono text-xs">{query.agentId}</span>,
-              <StatusBadge key="status" status={query.statusCode < 400 ? "active" : "error"} label={String(query.statusCode)} />,
+              query.statusCode === 0 ? (
+                <StatusBadge key="status" status="archived" label="No response" />
+              ) : (
+                <StatusBadge key="status" status={query.statusCode < 400 ? "active" : "error"} label={String(query.statusCode)} />
+              ),
               `${query.latencyMs}ms`,
               formatNumber(query.inputTokens),
               formatNumber(query.outputTokens),

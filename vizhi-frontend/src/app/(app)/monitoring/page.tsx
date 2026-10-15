@@ -160,7 +160,11 @@ export default function MonitoringPage() {
               </Link>,
               agentByCid(request.agentId),
               request.modelId,
-              <StatusBadge key="status" status={request.status < 300 ? "active" : "error"} label={String(request.status)} />,
+              request.status === 0 ? (
+              <StatusBadge key="status" status="archived" label="No response" />
+            ) : (
+              <StatusBadge key="status" status={request.status < 300 ? "active" : "error"} label={String(request.status)} />
+            ),
               `${request.latencyMs}ms`,
               formatNumber(request.inputTokens),
               formatNumber(request.outputTokens),

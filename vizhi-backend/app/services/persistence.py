@@ -32,6 +32,88 @@ def _id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+# ── Response text extraction ────────────────────────────────────────────
+
+
+def _text_of(value: object) -> str:
+    """Flatten a message "content" value: str, None, or a list of parts
+    (Anthropic/OpenAI multi-part: [{"type": "text", "text": ...}])."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = []
+        for part in value:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                parts.append(part["text"])
+        return "".join(parts)
+    return str(value)
+
+
+def extract_response_text(raw: str | None) -> str:
+    """Readable answer text from a stored ResponseRow.response.
+
+    Handles OpenAI chat/completions, Anthropic Messages, Gemini
+    generateContent, Ollama and the flat {"content"/"response": ...} shapes
+    agents submit. Never raises; unparseable payloads fall back to raw text.
+    """
+    if not raw:
+        return ""
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return raw[:2000]
+    if isinstance(data, str):
+        return data
+    if not isinstance(data, dict):
+        return raw[:2000]
+
+    choices = data.get("choices")
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        first = choices[0]
+        message = first.get("message")
+        if isinstance(message, dict) and message.get("content") is not None:
+            return _text_of(message["content"])
+        if first.get("text") is not None:
+            return _text_of(first["text"])
+    candidates = data.get("candidates")  # Gemini
+    if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+        content = candidates[0].get("content")
+        if isinstance(content, dict):
+            return _text_of(content.get("parts"))
+    if isinstance(data.get("message"), dict):  # Ollama
+        return _text_of(data["message"].get("content"))
+    for key in ("content", "response", "output", "text", "answer"):
+        if data.get(key) is not None:
+            return _text_of(data[key])
+    return ""
+
+
+def _usage_tokens(*sources: object) -> tuple[int, int]:
+    """(prompt, completion) tokens from the first source that reports them.
+    Accepts OpenAI usage, Anthropic input/output_tokens and Ollama eval counts."""
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        usage = src.get("usage") if isinstance(src.get("usage"), dict) else src
+        pairs = (
+            ("prompt_tokens", "completion_tokens"),
+            ("input_tokens", "output_tokens"),
+            ("prompt_eval_count", "eval_count"),
+        )
+        for p_key, c_key in pairs:
+            p_val, c_val = usage.get(p_key), usage.get(c_key)
+            if p_val is not None or c_val is not None:
+                try:
+                    return int(p_val or 0), int(c_val or 0)
+                except (TypeError, ValueError):
+                    break
+    return 0, 0
+
+
 # ── Write operations ────────────────────────────────────────────────────
 
 
@@ -234,15 +316,17 @@ async def complete_agent_job(
     if job.agent_id and job.agent_id != agent_id:
         raise ValueError("Job is assigned to a different agent")
 
-    job.status = "completed"
+    completed = status == "completed" and not error
+    job.status = "completed" if completed else "failed"
     if error:
         job.error_message = error
     job.completed_at = _utcnow()
     job.updated_at = _utcnow()
 
     usage = usage or {}
-    input_tokens = int(usage.get("prompt_tokens", 0) or 0)
-    output_tokens = int(usage.get("completion_tokens", 0) or 0)
+    # Agents report usage either in `usage` or inside the provider payload
+    # they forward as `output`; take whichever has it.
+    input_tokens, output_tokens = _usage_tokens(usage, output)
     # Prefer an explicit cost reported by the agent; otherwise estimate from
     # token usage so agent budget enforcement accumulates spend.
     try:
@@ -252,14 +336,22 @@ async def complete_agent_job(
     if estimated_cost == 0.0 and (input_tokens or output_tokens):
         estimated_cost = await _estimate_cost_from_tokens(job.provider, input_tokens, output_tokens)
 
+    # Without a reported latency, measure gateway-side: job created → result in.
+    try:
+        latency_ms = int(usage.get("latency_ms", 0) or 0)
+    except (TypeError, ValueError):
+        latency_ms = 0
+    if latency_ms <= 0 and job.created_at is not None:
+        latency_ms = max(0, int((job.completed_at - job.created_at).total_seconds() * 1000))
+
     response_row = ResponseRow(
         id=f"r_{_id()}",
         query_id=job.query_id,
         response=json.dumps(output),
-        latency_ms=int(usage.get("latency_ms", 0) or 0),
+        latency_ms=latency_ms,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        status_code=200 if status == "completed" else 500,
+        status_code=200 if completed else 500,
         error_message=error or None,
         estimated_cost=estimated_cost,
         timestamp=_utcnow(),
@@ -307,21 +399,7 @@ async def get_recent_requests(
             prompt = []
 
         # Extract readable response text from the stored raw response JSON
-        response_text = ""
-        if r and r.response:
-            try:
-                resp_data = json.loads(r.response)
-                if isinstance(resp_data, dict):
-                    if "choices" in resp_data and resp_data["choices"]:
-                        choice = resp_data["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            response_text = choice["message"]["content"] or ""
-                        elif "text" in choice:
-                            response_text = choice["text"] or ""
-                    elif "content" in resp_data:
-                        response_text = str(resp_data["content"])
-            except (json.JSONDecodeError, TypeError, KeyError):
-                response_text = (r.response or "")[:500]
+        response_text = extract_response_text(r.response) if r else ""
 
         items.append(
             RequestEventResponse(

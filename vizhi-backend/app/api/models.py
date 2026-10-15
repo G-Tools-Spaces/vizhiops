@@ -221,6 +221,7 @@ async def get_model_usage(
     from sqlalchemy import func
     import json
     from app.models.db_models import QueryRow, ResponseRow
+    from app.services.persistence import extract_response_text
     
     # Get the model connection
     result = await db.execute(
@@ -306,30 +307,17 @@ async def get_model_usage(
         )
         r = resp_result.scalar_one_or_none()
         
-        # Parse input messages
+        # Parse input messages (keep only well-formed message dicts)
         try:
             prompt = json.loads(q.input_messages) if q.input_messages else []
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
             prompt = []
-        
-        # Extract response text
-        response_text = ""
-        if r and r.response:
-            try:
-                response_data = json.loads(r.response)
-                # Try to extract content from different response formats
-                if isinstance(response_data, dict):
-                    if "choices" in response_data and len(response_data["choices"]) > 0:
-                        choice = response_data["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            response_text = choice["message"]["content"]
-                        elif "text" in choice:
-                            response_text = choice["text"]
-                    elif "content" in response_data:
-                        response_text = response_data["content"]
-            except json.JSONDecodeError:
-                response_text = r.response[:500] if r.response else ""
-        
+        if not isinstance(prompt, list):
+            prompt = []
+        prompt = [m for m in prompt if isinstance(m, dict)]
+
+        response_text = extract_response_text(r.response) if r else ""
+
         query_details.append(
             QueryDetailItem(
                 query_id=q.id,
@@ -337,11 +325,11 @@ async def get_model_usage(
                 agent_id=q.agent_id,
                 prompt=prompt,
                 response_text=response_text,
-                input_tokens=r.input_tokens if r else 0,
-                output_tokens=r.output_tokens if r else 0,
-                latency_ms=r.latency_ms if r else 0,
-                status_code=r.status_code if r else 0,
-                estimated_cost=r.estimated_cost if r else 0.0,
+                input_tokens=(r.input_tokens or 0) if r else 0,
+                output_tokens=(r.output_tokens or 0) if r else 0,
+                latency_ms=(r.latency_ms or 0) if r else 0,
+                status_code=(r.status_code or 0) if r else 0,
+                estimated_cost=(r.estimated_cost or 0.0) if r else 0.0,
                 error_message=r.error_message if r else None,
             )
         )

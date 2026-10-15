@@ -11,6 +11,7 @@ from app.auth.user_auth import get_current_user
 from app.db.session import get_db
 from app.models.db_models import QueryRow, ResponseRow, UserRow
 from app.schemas.responses import RequestEventResponse
+from app.services.persistence import extract_response_text
 
 router = APIRouter(prefix="/v1/queries", tags=["queries"])
 
@@ -50,21 +51,7 @@ async def list_queries(
         except (json.JSONDecodeError, TypeError):
             prompt = []
 
-        response_text = ""
-        if r and r.response:
-            try:
-                resp_data = json.loads(r.response)
-                if isinstance(resp_data, dict):
-                    if "choices" in resp_data and resp_data["choices"]:
-                        choice = resp_data["choices"][0]
-                        if "message" in choice and "content" in choice["message"]:
-                            response_text = choice["message"]["content"] or ""
-                        elif "text" in choice:
-                            response_text = choice["text"] or ""
-                    elif "content" in resp_data:
-                        response_text = str(resp_data["content"])
-            except (json.JSONDecodeError, TypeError, KeyError):
-                response_text = (r.response or "")[:500]
+        response_text = extract_response_text(r.response) if r else ""
 
         items.append(
             RequestEventResponse(
@@ -111,21 +98,7 @@ async def get_query(
     except (json.JSONDecodeError, TypeError):
         prompt = []
 
-    response_text = ""
-    if r and r.response:
-        try:
-            resp_data = json.loads(r.response)
-            if isinstance(resp_data, dict):
-                if "choices" in resp_data and resp_data["choices"]:
-                    choice = resp_data["choices"][0]
-                    if "message" in choice and "content" in choice["message"]:
-                        response_text = choice["message"]["content"] or ""
-                    elif "text" in choice:
-                        response_text = choice["text"] or ""
-                elif "content" in resp_data:
-                    response_text = str(resp_data["content"])
-        except (json.JSONDecodeError, TypeError, KeyError):
-            response_text = (r.response or "")[:500]
+    response_text = extract_response_text(r.response) if r else ""
 
     return RequestEventResponse(
         id=q.id,

@@ -146,11 +146,25 @@ async def chat_completions(
 
         messages_raw = [m.model_dump() for m in body.messages]
         try:
-            # OPTIMIZATION: Generate IDs upfront and notify agent immediately
             query_id = f"q_{uuid.uuid4().hex[:12]}"
             job_id = f"j_{uuid.uuid4().hex[:12]}"
-            
-            # 1. Notify agent FIRST (before DB writes for speed)
+
+            # 1. Persist the query + job BEFORE telling the agent. A fast agent
+            #    can submit its result within milliseconds; if the job row did
+            #    not exist yet, /jobs/submit answered "Job not found" and the
+            #    response was lost (trace showed status 0, no tokens, no body).
+            await _persist_agent_job_async(
+                query_id=query_id,
+                job_id=job_id,
+                agent_id=credential.principal_id,
+                user_id=credential.user_id,
+                provider=provider_name,
+                model=resolved_model,
+                sdk_type=body.call_sdk,
+                messages=messages_raw,
+            )
+
+            # 2. Notify the agent.
             try:
                 await agent_ws_manager.notify(
                     credential.principal_id,
@@ -168,22 +182,8 @@ async def chat_completions(
                 )
             except Exception as exc:
                 logger.warning(f"Failed to notify agent via websocket: {exc}")
-            
-            # 2. Store in DB asynchronously (fire-and-forget for speed)
-            asyncio.create_task(
-                _persist_agent_job_async(
-                    query_id=query_id,
-                    job_id=job_id,
-                    agent_id=credential.principal_id,
-                    user_id=credential.user_id,
-                    provider=provider_name,
-                    model=resolved_model,
-                    sdk_type=body.call_sdk,
-                    messages=messages_raw,
-                )
-            )
-            
-            # 3. Wait for result (agent already started processing!)
+
+            # 3. Wait for the agent to submit its result.
             return await _wait_for_agent_result(
                 query_id=query_id,
                 job_id=job_id,
@@ -557,11 +557,15 @@ async def _persist_agent_job_async(
     sdk_type: str | None,
     messages: list[dict],
 ) -> None:
-    """Persist job to database asynchronously (non-blocking for speed)."""
-    try:
-        async with async_session_factory() as db:
-            # Save query
-            query_row = QueryRow(
+    """Persist the query and its agent job in one transaction.
+
+    Raises on failure: without the job row the agent's result cannot be
+    stored, so the request must fail instead of waiting for a timeout.
+    """
+    now = utcnow()
+    async with async_session_factory() as db:
+        db.add(
+            QueryRow(
                 id=query_id,
                 user_id=user_id,
                 agent_id=agent_id,
@@ -570,12 +574,11 @@ async def _persist_agent_job_async(
                 sdk_type=sdk_type,
                 input_messages=json.dumps(messages),
                 endpoint="/v1/chat/completions",
-                timestamp=utcnow(),
+                timestamp=now,
             )
-            db.add(query_row)
-            
-            # Save job
-            job_row = AgentJobRow(
+        )
+        db.add(
+            AgentJobRow(
                 id=job_id,
                 query_id=query_id,
                 user_id=user_id,
@@ -588,14 +591,13 @@ async def _persist_agent_job_async(
                 input_payload=json.dumps({"messages": messages}),
                 stream=False,
                 metadata_=json.dumps({"source": "chat-gateway"}),
-                status="running",  # Already running!
+                status="running",  # pushed straight to the agent, never queued
                 attempt_count=1,
+                created_at=now,
             )
-            db.add(job_row)
-            await db.commit()
-            logger.info(f"Persisted agent job {job_id} for query {query_id}")
-    except Exception as exc:
-        logger.error(f"Failed to persist agent job {job_id}: {exc}")
+        )
+        await db.commit()
+    logger.info(f"Persisted agent job {job_id} for query {query_id}")
 
 
 async def _wait_for_agent_result(
