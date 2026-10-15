@@ -1,10 +1,10 @@
 "use client";
 
-import { Eye, RefreshCcw, ShieldOff, Trash2, Copy, Check, Wallet } from "lucide-react";
+import { Eye, RefreshCcw, ShieldOff, Trash2, Copy, Check, Wallet, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { DataTable } from "@/components/shared/data-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -90,12 +90,14 @@ export default function ModelTokensPage() {
     <>
       <PageHeader
         title="Model Tokens"
-        description="Reusable model access tokens. Full tokens are shown only once at creation or rotation — copy them immediately. Only masked versions are stored and displayed here."
-        action={<Button variant="primary"><Link href="/models/connect">Connect Model</Link></Button>}
+        description="Reusable model access tokens. Full tokens are shown once, at creation or rotation — only masked versions are stored."
+        action={<Link href="/models/connect" className={buttonClass({ variant: "primary" })}><Plus className="h-4 w-4" />Connect model</Link>}
       />
       <DataTable
+        title="Model tokens"
         tableId="model-tokens"
-        headers={["Token Name", "Model", "Provider", "Token", "Last Used", "Created", "Usage", "Status", "Actions"]}
+        emptyMessage="No model tokens yet. Connect a model to create one."
+        headers={["Model", "Token name", "Provider", "Token", "Last used", "Created", "Usage", "Status", "Actions"]}
         rows={models.map((model) => {
           const isRevoked = model.status === "revoked";
           const isPending = pendingId === model.id;
@@ -103,22 +105,22 @@ export default function ModelTokensPage() {
           const label = model.tokenName || model.modelName;
 
           return [
-            // Token Name
-            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}`}>
-              {model.tokenName || <span className="text-[var(--ink-tertiary)] italic">—</span>}
-            </span>,
-
             // Model name (clickable → usage page)
             <button
               key="model-name"
               onClick={() => handleViewUsage(model.id)}
-              className="text-left hover:text-[var(--accent)] transition-colors cursor-pointer font-medium text-sm"
+              className="text-left font-semibold text-[var(--ink)] transition-colors hover:text-[var(--accent)]"
             >
               {model.modelName}
             </button>,
 
+            // Token Name
+            <span key="tn" className={isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}>
+              {model.tokenName || <span className="text-[var(--ink-tertiary)]">—</span>}
+            </span>,
+
             // Provider
-            <span key="provider" className="text-sm">{model.provider}</span>,
+            <span key="provider">{model.provider}</span>,
 
             // Token — after rotation show copy-once key, otherwise masked
             <div className="flex items-center gap-2" key="token">
@@ -134,8 +136,7 @@ export default function ModelTokensPage() {
                   <span className="font-mono text-xs" title="Full token only shown once at creation or rotation">
                     {model.maskedKey}
                   </span>
-                  <span className="text-xs text-[var(--ink-tertiary)]">(masked)</span>
-                </>
+                                  </>
               )}
             </div>,
 
@@ -153,7 +154,7 @@ export default function ModelTokensPage() {
             <button
               key="usage"
               onClick={() => handleViewUsage(model.id)}
-              className="hover:text-[var(--accent)] transition-colors cursor-pointer font-medium text-sm"
+              className="font-mono text-xs transition-colors hover:text-[var(--accent)]"
             >
               {formatNumber(model.usageCount)}
             </button>,
@@ -162,10 +163,10 @@ export default function ModelTokensPage() {
             <StatusBadge key="status" status={isRevoked ? "disabled" : model.status} />,
 
             // Actions
-            <div className="flex gap-2" key="actions">
+            <div className="flex gap-1.5" key="actions">
               {/* View Usage */}
               <Button size="icon" title="View Usage Details" onClick={() => handleViewUsage(model.id)}>
-                <Eye className="h-4 w-4" />
+                <Eye className="h-3.5 w-3.5" />
               </Button>
 
               {/* Rotate */}
@@ -175,7 +176,7 @@ export default function ModelTokensPage() {
                 disabled={isPending}
                 onClick={() => handleRotate(model.id, label)}
               >
-                <RefreshCcw className="h-4 w-4" />
+                <RefreshCcw className="h-3.5 w-3.5" />
               </Button>
 
               {/* Revoke */}
@@ -186,7 +187,7 @@ export default function ModelTokensPage() {
                 disabled={isPending || isRevoked}
                 onClick={() => handleRevoke(model.id, label)}
               >
-                <ShieldOff className="h-4 w-4" />
+                <ShieldOff className="h-3.5 w-3.5" />
               </Button>
 
               {/* Budget */}
@@ -197,7 +198,7 @@ export default function ModelTokensPage() {
                 variant={budgetId === model.id ? "primary" : "secondary"}
                 onClick={() => setBudgetId(budgetId === model.id ? null : model.id)}
               >
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-3.5 w-3.5" />
               </Button>
 
               {/* Delete */}
@@ -208,7 +209,7 @@ export default function ModelTokensPage() {
                 disabled={isPending}
                 onClick={() => handleDelete(model.id, label)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>,
 
@@ -255,7 +256,7 @@ function CopyOnceButton({ value, onDismiss }: { value: string; onDismiss: () => 
     <button
       onClick={handleCopy}
       title={copied ? "Copied!" : "Copy new token — it will disappear after copying"}
-      className="p-1 rounded hover:bg-[var(--surface-strong)] transition-colors"
+      className="p-1 transition-colors hover:bg-[var(--surface-strong)]"
     >
       {copied ? (
         <Check className="h-3.5 w-3.5 text-[var(--ok)]" />

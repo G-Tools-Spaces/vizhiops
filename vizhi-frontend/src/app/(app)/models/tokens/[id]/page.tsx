@@ -1,14 +1,15 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { ArrowLeft, TrendingUp, Clock, AlertCircle, CheckCircle, DollarSign } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useParams } from "next/navigation";
+import { AlertCircle, ArrowLeft, CheckCircle, Clock, DollarSign, Layers, TrendingUp } from "lucide-react";
+import { Card, CardRow } from "@/components/ui/card";
+import { DataTable } from "@/components/shared/data-table";
+import { KpiGrid, MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useModelUsage } from "@/lib/api/queries";
-import { formatNumber } from "@/lib/utils";
+import { formatDateTime, formatNumber } from "@/lib/utils";
 
 export default function ModelUsageDetailPage() {
   const params = useParams();
@@ -16,17 +17,13 @@ export default function ModelUsageDetailPage() {
   const { data, isLoading, error } = useModelUsage(modelId);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-[var(--ink-tertiary)]">Loading model usage...</div>
-      </div>
-    );
+    return <div className="py-24 text-center text-[13px] text-[var(--ink-tertiary)]">Loading model usage…</div>;
   }
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-[var(--danger)]">Failed to load model usage details</div>
+      <div className="border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-3 text-[13px] text-[var(--danger)]">
+        Failed to load model usage details.
       </div>
     );
   }
@@ -35,176 +32,86 @@ export default function ModelUsageDetailPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <Link href="/models/tokens">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Models
-          </Button>
-        </Link>
+      <Link
+        href="/models/tokens"
+        className="mb-4 inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink-secondary)] hover:text-[var(--ink)]"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Model tokens
+      </Link>
+
+      <PageHeader title={modelConnection.modelName} description={`Usage analytics for this ${modelConnection.provider} model token.`} />
+
+      <div className="grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <Card>
+          <CardRow label="Provider">{modelConnection.provider}</CardRow>
+          <CardRow label="Status"><StatusBadge status={modelConnection.status} /></CardRow>
+          <CardRow label="Token"><span className="font-mono text-xs">{modelConnection.maskedKey}</span></CardRow>
+          <CardRow label="Created">{new Date(modelConnection.createdAt).toLocaleDateString()}</CardRow>
+        </Card>
+
+        <KpiGrid className="grid-cols-2 md:grid-cols-3">
+          <MetricCard label="Requests" value={formatNumber(stats.totalRequests)} icon={TrendingUp} />
+          <MetricCard
+            label="Tokens"
+            value={formatNumber(stats.totalTokens)}
+            hint={`${formatNumber(stats.totalInputTokens)} in / ${formatNumber(stats.totalOutputTokens)} out`}
+            icon={Layers}
+          />
+          <MetricCard label="Avg latency" value={`${stats.avgLatencyMs}ms`} icon={Clock} />
+          <MetricCard label="Cost" value={`$${stats.totalCost.toFixed(4)}`} hint="Estimated" icon={DollarSign} />
+          <MetricCard label="Success rate" value={`${stats.successRate}%`} icon={CheckCircle} tone="ok" />
+          <MetricCard
+            label="Errors"
+            value={String(stats.errorCount)}
+            icon={AlertCircle}
+            tone={stats.errorCount > 0 ? "danger" : undefined}
+          />
+        </KpiGrid>
       </div>
 
-      <PageHeader
-        title={`${modelConnection.modelName} Usage`}
-        description={`Detailed usage analytics for ${modelConnection.provider} model`}
-      />
-
-      {/* Model Info Card */}
-      <Card className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-sm text-[var(--ink-tertiary)] mb-1">Provider</div>
-            <div className="text-lg font-semibold">{modelConnection.provider}</div>
-          </div>
-          <div>
-            <div className="text-sm text-[var(--ink-tertiary)] mb-1">Status</div>
-            <StatusBadge status={modelConnection.status} />
-          </div>
-          <div>
-            <div className="text-sm text-[var(--ink-tertiary)] mb-1">Token</div>
-            <div className="font-mono text-sm">{modelConnection.maskedKey}</div>
-          </div>
-          <div>
-            <div className="text-sm text-[var(--ink-tertiary)] mb-1">Created</div>
-            <div className="text-sm">{new Date(modelConnection.createdAt).toLocaleDateString()}</div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Statistics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Total Requests</div>
-            <TrendingUp className="h-4 w-4 text-[var(--accent)]" />
-          </div>
-          <div className="text-2xl font-bold">{formatNumber(stats.totalRequests)}</div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Total Tokens</div>
-            <TrendingUp className="h-4 w-4 text-[var(--accent)]" />
-          </div>
-          <div className="text-2xl font-bold">{formatNumber(stats.totalTokens)}</div>
-          <div className="text-xs text-[var(--ink-tertiary)] mt-1">
-            {formatNumber(stats.totalInputTokens)} in / {formatNumber(stats.totalOutputTokens)} out
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Avg Latency</div>
-            <Clock className="h-4 w-4 text-[var(--accent)]" />
-          </div>
-          <div className="text-2xl font-bold">{stats.avgLatencyMs}ms</div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Total Cost</div>
-            <DollarSign className="h-4 w-4 text-[var(--accent)]" />
-          </div>
-          <div className="text-2xl font-bold">${stats.totalCost.toFixed(4)}</div>
-        </Card>
-      </div>
-
-      {/* Success Rate and Errors */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Success Rate</div>
-            <CheckCircle className="h-4 w-4 text-[var(--ok)]" />
-          </div>
-          <div className="text-2xl font-bold">{stats.successRate}%</div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-[var(--ink-tertiary)]">Error Count</div>
-            <AlertCircle className="h-4 w-4 text-[var(--danger)]" />
-          </div>
-          <div className="text-2xl font-bold">{stats.errorCount}</div>
-        </Card>
-      </div>
-
-      {/* Recent Queries */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Recent Query History</h2>
-        <div className="space-y-4">
-          {recentQueries.length === 0 ? (
-            <div className="text-center py-8 text-[var(--ink-tertiary)]">No queries found for this model</div>
-          ) : (
-            recentQueries.map((query) => (
-              <div
-                key={query.queryId}
-                className="border border-[var(--line)] rounded-lg p-4 hover:border-[var(--accent)] transition-colors"
+      <section className="mt-6">
+        <DataTable
+          title="Recent queries"
+          tableId="model-usage-queries"
+          emptyMessage="No queries for this model yet."
+          defaultHidden={["Response"]}
+          headers={["Time", "Query ID", "Agent", "Status", "Latency", "Input", "Output", "Cost", "Prompt", "Response"]}
+          rows={recentQueries.map((query) => {
+            const lastUser = [...query.prompt].reverse().find((m) => m.role === "user") ?? query.prompt[query.prompt.length - 1];
+            return [
+              <span key="time" className="whitespace-nowrap font-mono text-xs text-[var(--ink-secondary)]">
+                {formatDateTime(query.timestamp)}
+              </span>,
+              <Link
+                key="id"
+                href={`/traces/${query.queryId}`}
+                className="font-mono text-xs text-[var(--accent)] hover:text-[var(--accent-hover)]"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xs font-mono text-[var(--ink-tertiary)]">{query.queryId}</span>
-                      <StatusBadge status={query.statusCode < 400 ? "active" : "error"} />
-                      <span className="text-xs text-[var(--ink-tertiary)]">
-                        {new Date(query.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-xs text-[var(--ink-tertiary)]">Agent: {query.agentId}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">${query.estimatedCost.toFixed(4)}</div>
-                    <div className="text-xs text-[var(--ink-tertiary)]">{query.latencyMs}ms</div>
-                  </div>
-                </div>
-
-                {/* Prompt Section */}
-                <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">PROMPT:</div>
-                  <div className="bg-[var(--surface)] p-3 rounded text-sm max-h-32 overflow-y-auto">
-                    {query.prompt.length > 0 ? (
-                      query.prompt.map((msg, idx) => (
-                        <div key={idx} className="mb-2 last:mb-0">
-                          <span className="font-semibold text-[var(--accent)]">{msg.role}:</span>{" "}
-                          <span className="text-[var(--ink)]">{msg.content}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-[var(--ink-tertiary)]">No prompt data</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Response Section */}
-                <div className="mb-3">
-                  <div className="text-xs font-semibold text-[var(--ink-tertiary)] mb-1">RESPONSE:</div>
-                  <div className="bg-[var(--surface)] p-3 rounded text-sm max-h-32 overflow-y-auto">
-                    {query.errorMessage ? (
-                      <span className="text-[var(--danger)]">{query.errorMessage}</span>
-                    ) : query.responseText ? (
-                      <span className="text-[var(--ink)]">{query.responseText}</span>
-                    ) : (
-                      <span className="text-[var(--ink-tertiary)]">No response data</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Token Usage */}
-                <div className="flex items-center gap-4 text-xs text-[var(--ink-tertiary)]">
-                  <div>
-                    <span className="font-semibold">Input:</span> {formatNumber(query.inputTokens)} tokens
-                  </div>
-                  <div>
-                    <span className="font-semibold">Output:</span> {formatNumber(query.outputTokens)} tokens
-                  </div>
-                  <div>
-                    <span className="font-semibold">Total:</span> {formatNumber(query.inputTokens + query.outputTokens)} tokens
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Card>
+                {query.queryId}
+              </Link>,
+              <span key="agent" className="font-mono text-xs">{query.agentId}</span>,
+              <StatusBadge key="status" status={query.statusCode < 400 ? "active" : "error"} label={String(query.statusCode)} />,
+              `${query.latencyMs}ms`,
+              formatNumber(query.inputTokens),
+              formatNumber(query.outputTokens),
+              `$${query.estimatedCost.toFixed(4)}`,
+              <span key="prompt" className="block max-w-[280px] truncate" title={lastUser?.content}>
+                {lastUser?.content ?? "—"}
+              </span>,
+              query.errorMessage ? (
+                <span key="response" className="block max-w-[280px] truncate text-[var(--danger)]" title={query.errorMessage}>
+                  {query.errorMessage}
+                </span>
+              ) : (
+                <span key="response" className="block max-w-[280px] truncate" title={query.responseText}>
+                  {query.responseText || "—"}
+                </span>
+              ),
+            ];
+          })}
+        />
+      </section>
     </>
   );
 }

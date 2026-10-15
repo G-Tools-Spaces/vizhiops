@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 /*
- * Vizhi frontend design system — Pingie-style dark UI.
- * Values replicated from the design reference mockup:
- *   canvas #0A0A0B · sidebar #0C0C0E · cards #0F0F11 · inputs #111113
- *   active nav #17171B · hairlines #222226 / #2E2E34 / #1A1A1E
- *   ink #FAFAFA / #A1A1AA / #8B8B94 · brand purple #7C3AED / #8B5CF6 / #A78BFA
- *   ok #34D399 · warn #F59E0B · danger #FCA5A5
+ * Vizhi design system — Ping-style dark UI: black canvas, hairline borders,
+ * square corners everywhere, one accent colour.
+ *
+ *   canvas #0A0A0B · sidebar #0C0C0E · panels #0F0F11 · inputs #111113
+ *   hover #17171B · hairlines #222226 / #2E2E34 / #1A1A1E
+ *   ink #FAFAFA / #D4D4D8 / #A1A1AA / #8B8B94
+ *   accent: electric blue #2563EB / #3B82F6 / #60A5FA / #93C5FD
+ *   ok #34D399 · warn #F59E0B · danger #FCA5A5 · info #22D3EE
+ *
+ * To re-skin, change only the "Accent" block below (and its light twin).
  */
 
 :root {
@@ -14,12 +18,15 @@
 
   /* Surfaces — one-step differences, separated by hairlines not contrast. */
   --canvas: #0a0a0b;
+  --sidebar: #0c0c0e;
   --panel: #0f0f11;
   --surface: #111113;
   --surface-strong: #17171b;
+  --chip: #26262c;
 
   /* Text. */
   --ink: #fafafa;
+  --ink-2: #d4d4d8;
   --ink-secondary: #a1a1aa;
   --ink-tertiary: #8b8b94;
 
@@ -27,33 +34,35 @@
   --line: #222226;
   --line-soft: #1a1a1e;
   --line-strong: #2e2e34;
+  --divider: #3a3a42;
 
-  /* Brand — filled purple for primary actions, lighter for text accents. */
-  --brand: #7c3aed;
-  --brand-hover: #8b5cf6;
+  /* Accent — filled blue for primary actions, lighter blue for text. */
+  --brand: #2563eb;
+  --brand-hover: #3b82f6;
   --brand-ink: #ffffff;
-  --accent: #a78bfa;
-  --accent-hover: #c4b5fd;
-  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-dim: #1e3a8a;
 
   /* Status. */
   --ok: #34d399;
-  --ok-soft: rgba(52, 211, 153, 0.12);
+  --ok-soft: rgba(52, 211, 153, 0.1);
+  --ok-border: #1f5c46;
   --warn: #f59e0b;
-  --warn-soft: rgba(245, 158, 11, 0.12);
+  --warn-soft: rgba(245, 158, 11, 0.1);
+  --warn-border: #6b4e12;
   --danger: #fca5a5;
-  --danger-soft: rgba(252, 165, 165, 0.12);
-  --info: #7cc7ff;
-  --info-soft: rgba(124, 199, 255, 0.12);
+  --danger-soft: rgba(239, 68, 68, 0.1);
+  --danger-border: #6b2525;
+  --info: #22d3ee;
+  --info-soft: rgba(34, 211, 238, 0.1);
+  --info-border: #155e6b;
 
   --muted: #8b8b94;
   --muted-soft: #17171b;
 
-  /* Radii — small and uniform. */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --topbar-h: 48px;
 }
 
 /* Light variant — same structure, lifted onto white. */
@@ -61,33 +70,42 @@
   color-scheme: light;
 
   --canvas: #fbfbfc;
+  --sidebar: #f7f8fa;
   --panel: #ffffff;
   --surface: #f7f8fa;
   --surface-strong: #eef1f4;
+  --chip: #e5e8ee;
 
   --ink: #17191f;
+  --ink-2: #2e333d;
   --ink-secondary: #5f6673;
   --ink-tertiary: #8c93a1;
 
   --line: #e5e8ee;
   --line-soft: #f1f3f6;
   --line-strong: #d7dbe2;
+  --divider: #c9ced8;
 
-  --brand: #7c3aed;
-  --brand-hover: #8b5cf6;
+  --brand: #2563eb;
+  --brand-hover: #3b82f6;
   --brand-ink: #ffffff;
-  --accent: #6d4fd8;
-  --accent-hover: #5b3fc4;
-  --accent-soft: #f1ecfd;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-soft: #eaf1fe;
+  --accent-dim: #bfd3fb;
 
   --ok: #178e57;
   --ok-soft: #eaf7f0;
+  --ok-border: #b5e3cb;
   --warn: #8f6a1e;
   --warn-soft: #fdf6e6;
+  --warn-border: #ecd9a8;
   --danger: #c33d34;
   --danger-soft: #fdf2f1;
-  --info: #2a6fb0;
-  --info-soft: #eff5fb;
+  --danger-border: #f1c2be;
+  --info: #0e7490;
+  --info-soft: #ecfbfe;
+  --info-border: #b3e8f3;
 
   --muted: #5d6470;
   --muted-soft: #eef0f5;
@@ -123,13 +141,14 @@ input,
 select,
 textarea {
   font: inherit;
+  border-radius: 0;
 }
 
 ::selection {
   background: var(--accent-soft);
 }
 
-/* Focus ring: visible for keyboard users, brand purple. */
+/* Focus ring: visible for keyboard users, in the accent colour. */
 :focus-visible {
   outline: 2px solid var(--brand-hover);
   outline-offset: 1px;
@@ -147,7 +166,18 @@ textarea {
   fill: var(--ink-tertiary) !important;
 }
 
-/* Tabular numerals for metric values — matches the mockup's KPI figures. */
+/* Tabular numerals for metric values. */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Native select: square, with a drawn chevron instead of the OS arrow. */
+select.vz-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-tertiary) 50%),
+    linear-gradient(135deg, var(--ink-tertiary) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
 }

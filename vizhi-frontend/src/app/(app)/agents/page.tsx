@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/shared/data-table";
-import { FieldError, Input, Label, Textarea } from "@/components/ui/field";
+import { FieldError, FieldHelp, Input, Label, Textarea } from "@/components/ui/field";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useAgents, useCreateAgent } from "@/lib/api/queries";
@@ -44,17 +44,17 @@ export default function AgentsPage() {
 
   return (
     <>
-      <PageHeader title="Agent Management" description="Create observable agent identities with stable CIDs, tags, metadata, and lifecycle controls." />
-      <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <PageHeader title="Agents" description="Observable agent identities with stable CIDs, tags and lifecycle controls." />
+      <div className="grid items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Create Agent</CardTitle>
+            <CardTitle>Create agent</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit(submit)}>
               <div className="space-y-2">
-                <Label>Agent Name</Label>
-                <Input {...register("name")} />
+                <Label>Name</Label>
+                <Input {...register("name")} placeholder="support-bot" />
                 <FieldError message={errors.name} />
               </div>
               <div className="space-y-2">
@@ -69,34 +69,36 @@ export default function AgentsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>
-                    Token Name <span className="text-[var(--ink-tertiary)] font-normal">(optional)</span>
+                    Token name <span className="font-normal text-[var(--ink-tertiary)]">(optional)</span>
                   </Label>
                   <Input
                     {...register("tokenName")}
                     placeholder="e.g. prod-ci-bot"
                     maxLength={120}
                   />
-                  <p className="text-xs text-[var(--ink-tertiary)]">A friendly label shown in the token list</p>
+                  <FieldHelp>Shown in the token list</FieldHelp>
                 </div>
               </div>
               <Button type="submit" variant="primary" disabled={createAgent.isPending}>
                 <Bot className="h-4 w-4" />
-                Create Agent
+                Create agent
               </Button>
             </form>
           </CardContent>
         </Card>
         <DataTable
+          title="All agents"
           tableId="agents"
+          emptyMessage="No agents yet. Create one to get a CID and API key."
           headers={["Agent", "CID", "Tags", "Status", "Actions"]}
           rows={data.map((agent) => [
-            <div key="agent"><p className="font-medium">{agent.name}</p><p className="text-xs text-[var(--ink-tertiary)]">{agent.description}</p></div>,
+            <div key="agent" className="min-w-0"><p className="font-semibold text-[var(--ink)]">{agent.name}</p><p className="max-w-xs truncate text-xs font-normal text-[var(--ink-tertiary)]">{agent.description}</p></div>,
             <span className="font-mono text-xs" key="cid">{agent.cid}</span>,
-            agent.tags.join(", "),
+            agent.tags.length ? agent.tags.join(", ") : "—",
             <StatusBadge key="status" status={agent.status} />,
-            <div className="flex gap-2" key="actions">
-              <Button size="icon" title="Edit"><Edit className="h-4 w-4" /></Button>
-              <Button size="icon" variant="danger" title="Delete"><Trash2 className="h-4 w-4" /></Button>
+            <div className="flex gap-1.5" key="actions">
+              <Button size="icon" title="Edit"><Edit className="h-3.5 w-3.5" /></Button>
+              <Button size="icon" variant="danger" title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>,
           ])}
         />

@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { cn } from "@/lib/utils";
 
@@ -258,17 +258,18 @@ export default function PlaygroundPage() {
   return (
     <>
       <PageHeader
-        title="Live Chat Playground"
-        description="Test any model token with real-time streaming — verify routing, fallback, and latency before shipping."
+        title="Playground"
+        description="Stream a chat through any model token to check routing, fallback and latency before shipping."
       />
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid items-start gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* ── Config Panel ──────────────────────────────────────────────── */}
         <aside className="space-y-4">
-          <Card className="p-4 space-y-4">
-            <p className="text-xs font-semibold text-[var(--ink-tertiary)] uppercase tracking-wider">
-              Configuration
-            </p>
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
 
             <Field label="Model Token *">
               <input
@@ -330,29 +331,31 @@ export default function PlaygroundPage() {
                 placeholder="You are a helpful assistant."
                 value={config.systemPrompt}
                 onChange={(e) => cfg("systemPrompt", e.target.value)}
-                className={cn(inputCls, "resize-none")}
+                className={cn(inputCls, "h-auto resize-none py-2")}
               />
             </Field>
+            </CardContent>
           </Card>
 
           {/* Tips */}
-          <Card className="p-4 space-y-2 text-xs text-[var(--ink-tertiary)]">
-            <p className="font-semibold text-[var(--ink)]">Tips</p>
-            <p>• Get a <strong>Model Token</strong> from Models → Tokens.</p>
-            <p>• <strong>Stream=true</strong> is always used for real-time output.</p>
-            <p>• Press <kbd className="font-mono bg-[var(--surface-strong)] px-1 rounded">Enter</kbd> to send, <kbd className="font-mono bg-[var(--surface-strong)] px-1 rounded">Shift+Enter</kbd> for newline.</p>
-            <p>• Click <strong>Stop</strong> to cancel mid-stream.</p>
+          <Card className="space-y-1.5 px-[18px] py-4 text-xs leading-relaxed text-[var(--ink-secondary)]">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-tertiary)]">Tips</p>
+            <p>Get a model token from <strong className="text-[var(--ink)]">Model Tokens</strong>.</p>
+            <p>Responses always stream.</p>
+            <p>
+              <kbd className={kbdCls}>Enter</kbd> sends, <kbd className={kbdCls}>Shift+Enter</kbd> adds a new line.
+            </p>
           </Card>
         </aside>
 
         {/* ── Chat Panel ────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3">
           {/* Messages */}
-          <Card className="flex-1 min-h-[480px] max-h-[640px] overflow-y-auto p-4 space-y-4">
+          <Card className="block min-h-[480px] max-h-[640px] flex-1 space-y-4 overflow-y-auto p-[18px]">
             {messages.length === 0 && (
-              <div className="flex h-full items-center justify-center text-center text-sm text-[var(--ink-tertiary)]">
+              <div className="flex min-h-[440px] items-center justify-center text-center text-[13px] text-[var(--ink-tertiary)]">
                 <div>
-                  <Zap className="mx-auto mb-3 h-8 w-8 opacity-30" />
+                  <Zap className="mx-auto mb-3 h-6 w-6 text-[var(--accent)] opacity-60" />
                   <p>No messages yet.</p>
                   <p className="mt-1 text-xs">Configure a token and send a message to start.</p>
                 </div>
@@ -368,18 +371,18 @@ export default function PlaygroundPage() {
                 )}
               >
                 {msg.role === "assistant" && (
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/20 text-[var(--accent)]">
-                    <Bot className="h-4 w-4" />
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border border-[var(--accent-dim)] bg-[var(--accent-soft)] text-[var(--accent)]">
+                    <Bot className="h-3.5 w-3.5" />
                   </span>
                 )}
 
                 <div className={cn("max-w-[80%] space-y-1", msg.role === "user" && "items-end")}>
                   <div
                     className={cn(
-                      "rounded-xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+                      "whitespace-pre-wrap border px-4 py-2.5 text-[13px] leading-relaxed",
                       msg.role === "user"
-                        ? "bg-[var(--brand)] text-[var(--brand-ink)]"
-                        : "bg-[var(--surface-strong)] text-[var(--ink)]"
+                        ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--brand-ink)]"
+                        : "border-[var(--line)] bg-[var(--canvas)] text-[var(--ink)]"
                     )}
                   >
                     {msg.content}
@@ -390,29 +393,29 @@ export default function PlaygroundPage() {
 
                   {/* Metadata badge shown when stream is done */}
                   {msg.role === "assistant" && !msg.streaming && msg.meta && (
-                    <div className="flex flex-wrap gap-2 text-[10px] text-[var(--ink-tertiary)]">
+                    <div className="flex flex-wrap gap-1.5 font-mono text-[10px] text-[var(--ink-tertiary)]">
                       {msg.meta.provider && (
-                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
+                        <span className="border border-[var(--line-strong)] px-1.5 py-0.5">
                           {msg.meta.provider}
                         </span>
                       )}
                       {msg.meta.model && (
-                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
+                        <span className="border border-[var(--line-strong)] px-1.5 py-0.5">
                           {msg.meta.model}
                         </span>
                       )}
                       {msg.meta.usedFallback && (
-                        <span className="rounded bg-[var(--warn-soft)] px-1.5 py-0.5 text-[var(--warn)]">
+                        <span className="border border-[var(--warn-border)] px-1.5 py-0.5 text-[var(--warn)]">
                           fallback used
                         </span>
                       )}
                       {msg.meta.latencyMs != null && (
-                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5">
+                        <span className="border border-[var(--line-strong)] px-1.5 py-0.5">
                           {msg.meta.latencyMs}ms
                         </span>
                       )}
                       {msg.meta.queryId && (
-                        <span className="rounded bg-[var(--surface-strong)] px-1.5 py-0.5 font-mono">
+                        <span className="border border-[var(--line-strong)] px-1.5 py-0.5">
                           {msg.meta.queryId.slice(0, 16)}…
                         </span>
                       )}
@@ -421,15 +424,15 @@ export default function PlaygroundPage() {
                 </div>
 
                 {msg.role === "user" && (
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface-strong)] text-[var(--ink)]">
-                    <User className="h-4 w-4" />
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border border-[var(--line-strong)] bg-[var(--chip)] text-[var(--ink)]">
+                    <User className="h-3.5 w-3.5" />
                   </span>
                 )}
               </div>
             ))}
 
             {error && (
-              <div className="rounded-lg border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-sm text-[var(--danger)]">
+              <div className="border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-2.5 text-[13px] text-[var(--danger)]">
                 {error}
               </div>
             )}
@@ -438,7 +441,7 @@ export default function PlaygroundPage() {
           </Card>
 
           {/* Input area */}
-          <Card className="flex items-end gap-2 p-3">
+          <Card className="flex-row items-end gap-2 p-3 focus-within:border-[var(--line-strong)]">
             <textarea
               rows={2}
               placeholder="Type a message… (Enter to send)"
@@ -447,7 +450,7 @@ export default function PlaygroundPage() {
               onKeyDown={onKeyDown}
               disabled={isStreaming}
               className={cn(
-                "flex-1 resize-none bg-transparent text-sm text-[var(--ink)] placeholder:text-[var(--ink-tertiary)] outline-none disabled:opacity-50"
+                "flex-1 resize-none bg-transparent px-1 text-[13px] text-[var(--ink)] placeholder:text-[var(--ink-tertiary)] outline-none disabled:opacity-50"
               )}
             />
 
@@ -492,11 +495,13 @@ export default function PlaygroundPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-medium text-[var(--ink-tertiary)]">{label}</label>
+      <label className="block text-xs font-semibold text-[var(--ink-2)]">{label}</label>
       {children}
     </div>
   );
 }
 
 const inputCls =
-  "w-full rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-tertiary)] outline-none focus:border-[var(--brand)] transition";
+  "h-9 w-full border border-[var(--line-strong)] bg-[var(--canvas)] px-2.5 text-[13px] text-[var(--ink)] outline-none transition-colors placeholder:text-[var(--ink-tertiary)] focus:border-[var(--brand-hover)]";
+
+const kbdCls = "border border-[var(--line-strong)] px-1 font-mono text-[11px] text-[var(--ink)]";

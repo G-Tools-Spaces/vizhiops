@@ -76,11 +76,11 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[16vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-[12vh]"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel)] shadow-2xl"
+        className="w-full max-w-[560px] overflow-hidden border border-[var(--line-strong)] bg-[var(--panel)] shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
         onClick={(event) => event.stopPropagation()}
       >
         <Command label="Command palette" loop>
@@ -96,12 +96,12 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
               placeholder="Search pages, agents, models, traces…"
               className="h-12 w-full bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[var(--ink-tertiary)]"
             />
-            <kbd className="shrink-0 rounded border border-[var(--line)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--ink-tertiary)]">
+            <kbd className="shrink-0 border border-[var(--line-strong)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--ink-tertiary)]">
               ESC
             </kbd>
           </div>
 
-          <Command.List className="max-h-80 overflow-y-auto p-2">
+          <Command.List className="max-h-[360px] overflow-y-auto py-1">
             <Command.Empty className="py-10 text-center text-sm text-[var(--ink-tertiary)]">
               No results for &ldquo;{query}&rdquo;
             </Command.Empty>
@@ -211,7 +211,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
 
 function GroupHeading({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-2 pb-1 pt-2.5 text-[11px] font-medium uppercase tracking-wider text-[var(--ink-tertiary)]">
+    <p className="px-3.5 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-tertiary)]">
       {children}
     </p>
   );
@@ -230,11 +230,11 @@ function PaletteItem({ icon: Icon, label, meta, keywords, onSelect }: PaletteIte
     <Command.Item
       keywords={keywords}
       onSelect={onSelect}
-      className="flex h-10 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm text-[var(--ink-secondary)] transition-colors aria-selected:bg-[var(--accent-soft)] aria-selected:text-[var(--accent)]"
+      className="flex h-9 cursor-pointer items-center gap-2.5 px-3.5 text-[13px] font-medium text-[var(--ink-2)] aria-selected:bg-[var(--surface-strong)] aria-selected:text-[var(--ink)] aria-selected:shadow-[inset_2px_0_0_var(--brand-hover)]"
     >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{label}</span>
-      {meta ? <span className="ml-auto shrink-0 text-xs text-[var(--ink-tertiary)]">{meta}</span> : null}
+      {meta ? <span className="ml-auto shrink-0 font-mono text-[11px] text-[var(--ink-tertiary)]">{meta}</span> : null}
     </Command.Item>
   );
 }

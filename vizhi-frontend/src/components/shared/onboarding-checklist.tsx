@@ -67,10 +67,10 @@ export function OnboardingChecklist() {
   }
 
   return (
-    <section className="mb-6 rounded-lg border border-[var(--line)] bg-[var(--panel)]">
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-4 py-3">
+    <section className="mb-6 border border-[var(--line)] bg-[var(--panel)]">
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-[18px] py-3">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]">
+          <span className="flex h-7 w-7 items-center justify-center border border-[var(--accent-dim)] bg-[var(--accent-soft)] text-[var(--accent)]">
             <Rocket className="h-4 w-4" />
           </span>
           <div>
@@ -82,16 +82,16 @@ export function OnboardingChecklist() {
           type="button"
           onClick={dismiss}
           title="Dismiss"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]"
+          className="flex h-7 w-7 items-center justify-center text-[var(--ink-tertiary)] transition-colors hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 w-full bg-[var(--surface-strong)]">
+      <div className="h-0.5 w-full bg-[var(--line-soft)]">
         <div
-          className="h-1 rounded-r-full bg-[var(--brand)] transition-all"
+          className="h-0.5 bg-[var(--brand-hover)] transition-all"
           style={{ width: `${(doneCount / steps.length) * 100}%` }}
         />
       </div>
@@ -101,7 +101,7 @@ export function OnboardingChecklist() {
           <li key={step.label}>
             <Link
               href={step.href}
-              className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--surface)]"
+              className="group flex items-center gap-3 px-[18px] py-3 transition-colors hover:bg-[var(--surface)]"
             >
               {step.done ? (
                 <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-[var(--ok)]" />

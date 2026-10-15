@@ -21,11 +21,11 @@ export default function LinksPage() {
 
   return (
     <>
-      <PageHeader title="Agent to Model Linking" description="Bind agent monitoring identities to reusable model tokens for attribution, policy, and cost tracking." />
-      <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <PageHeader title="Links" description="Bind agents to model tokens for attribution, policy and cost tracking." />
+      <div className="grid items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Create Link</CardTitle>
+            <CardTitle>Create link</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -36,7 +36,7 @@ export default function LinksPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Model Token</Label>
+              <Label>Model token</Label>
               <Select value={modelId} onChange={(event) => setModelId(event.target.value)}>
                 <option value="">Select model token</option>
                 {models.map((model) => <option key={model.id} value={model.id}>{model.provider} · {model.modelName}</option>)}
@@ -44,21 +44,23 @@ export default function LinksPage() {
             </div>
             <Button variant="primary" disabled={!agentId || !modelId || createLink.isPending} onClick={() => createLink.mutate({ agentId, modelId })}>
               <Link2 className="h-4 w-4" />
-              Create Link
+              Create link
             </Button>
           </CardContent>
         </Card>
         <DataTable
+          title="Active links"
           tableId="links"
+          emptyMessage="No links yet. Pick an agent and a model token to create one."
           headers={["Agent", "Model", "Created", "Status", "Requests", "Tokens", "Actions"]}
           rows={links.map((link) => [
-            agents.find((agent) => agent.id === link.agentId)?.name,
-            models.find((model) => model.id === link.modelId)?.modelName,
+            <span key="agent" className="font-semibold text-[var(--ink)]">{agents.find((agent) => agent.id === link.agentId)?.name ?? "—"}</span>,
+            models.find((model) => model.id === link.modelId)?.modelName ?? "—",
             new Date(link.createdAt).toLocaleDateString(),
             <StatusBadge key="status" status={link.status} />,
             formatNumber(link.requestCount),
             formatNumber(link.tokenConsumption),
-            <Button key="action" size="icon" title="Unlink"><Unlink className="h-4 w-4" /></Button>,
+            <Button key="action" size="icon" title="Unlink"><Unlink className="h-3.5 w-3.5" /></Button>,
           ])}
         />
       </div>

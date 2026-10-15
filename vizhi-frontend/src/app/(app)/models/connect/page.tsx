@@ -6,7 +6,7 @@ import { CheckCircle, KeyRound } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/field";
+import { FieldError, FieldHelp, Input, Label, Select, Textarea } from "@/components/ui/field";
 import { PageHeader } from "@/components/shared/page-header";
 import { useCreateModelConnection, useModelCatalog } from "@/lib/api/queries";
 
@@ -83,11 +83,11 @@ export default function ConnectModelPage() {
 
   return (
     <>
-      <PageHeader title="Connect Model Provider" description="Create an LLM provider configuration, validate connectivity, and generate a reusable Vizhi model token." />
-      <form onSubmit={handleSubmit(submit)} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <PageHeader title="Connect model" description="Pick a provider and model, then generate a reusable Vizhi model token." />
+      <form onSubmit={handleSubmit(submit)} className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
           <CardHeader>
-            <CardTitle>Provider Configuration</CardTitle>
+            <CardTitle>Provider configuration</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
@@ -105,7 +105,7 @@ export default function ConnectModelPage() {
               <FieldError message={catalogError ? `Could not load providers: ${catalogError}` : undefined} />
             </div>
             <div className="space-y-2">
-              <Label>Model Name</Label>
+              <Label>Model</Label>
                <Select {...register("modelName")} disabled={modelCatalog.isLoading || !availableModels.length}>
                {modelCatalog.isLoading ? <option>Loading models...</option> : null}
                {!modelCatalog.isLoading && !availableModels.length ? <option>No models available</option> : null}
@@ -115,14 +115,14 @@ export default function ConnectModelPage() {
             </div>
             <div className="space-y-2">
               <Label>
-                Token Name <span className="text-[var(--ink-tertiary)] font-normal">(optional)</span>
+                Token name <span className="font-normal text-[var(--ink-tertiary)]">(optional)</span>
               </Label>
               <Input
                 {...register("tokenName")}
                 placeholder="e.g. production-gpt4o"
                 maxLength={120}
               />
-              <p className="text-xs text-[var(--ink-tertiary)]">A friendly label shown in the token list</p>
+              <FieldHelp>Shown in the token list</FieldHelp>
               <FieldError message={errors.tokenName} />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -132,27 +132,27 @@ export default function ConnectModelPage() {
             <div className="flex flex-wrap gap-2 md:col-span-2">
               <Button type="submit" variant="primary" disabled={createModel.isPending || modelCatalog.isLoading || !availableModels.length}>
                 <KeyRound className="h-4 w-4" />
-                Generate Model Token
+                Generate model token
               </Button>
             </div>
             {generatedToken ? (
-              <div className="md:col-span-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--ink)]">
+              <div className="border border-[var(--ok-border)] bg-[var(--ok-soft)] p-4 text-[13px] text-[var(--ink)] md:col-span-2">
                 <p className="font-semibold">Vizhi model token created</p>
-                <p className="mt-2 break-all text-xs">{generatedToken}</p>
-                <p className="mt-2 text-[var(--ink-tertiary)]">This token is shown only once. Store it securely.</p>
+                <p className="mt-2 break-all border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 font-mono text-xs">{generatedToken}</p>
+                <p className="mt-2 text-xs text-[var(--ink-secondary)]">Shown only once — store it securely.</p>
               </div>
             ) : null}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Security Contract</CardTitle>
+            <CardTitle>Security</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-[var(--ink-tertiary)]">
+          <CardContent className="space-y-4 text-[13px] leading-relaxed text-[var(--ink-secondary)]">
               <p>
               Vizhi generates a reusable model token and stores only a masked version. The raw token is shown once after creation.
               </p>
-            <div className="rounded-md border border-[var(--ok)]/30 bg-[var(--ok-soft)] p-3 text-[var(--ok)]">
+            <div className="border border-[var(--ok-border)] px-3 py-2.5 text-xs font-semibold text-[var(--ok)]">
               <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Token creation is handled by Vizhi</span>
             </div>
           </CardContent>

@@ -84,11 +84,13 @@ export default function AgentTokensPage() {
     <>
       <PageHeader
         title="Agent Tokens"
-        description="Monitoring identities for external applications. Full tokens are shown only once at creation or after rotation — copy them immediately. Only masked versions are displayed here."
+        description="Monitoring identities for external applications. Full tokens are shown once, at creation or rotation — only masked versions are stored."
       />
       <DataTable
+        title="Agent tokens"
         tableId="agent-tokens"
-        headers={["Token Name", "Agent", "CID", "Token", "Last Used", "Created", "Status", "Actions"]}
+        emptyMessage="No agent tokens yet. Create an agent to issue one."
+        headers={["Agent", "Token name", "CID", "Token", "Last used", "Created", "Status", "Actions"]}
         rows={agents.map((agent) => {
           const isRevoked = agent.status === "revoked";
           const isPending = pendingCID === agent.cid;
@@ -96,17 +98,17 @@ export default function AgentTokensPage() {
           const isJustRotated = rotatedToken?.cid === agent.cid;
 
           return [
-            // Token Name
-            <span key="tn" className={`text-sm ${isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}`}>
-              {agent.tokenName || <span className="text-[var(--ink-tertiary)] italic">—</span>}
-            </span>,
-
             // Agent Name + linked model count
-            <span key="name" className="text-sm font-medium">
+            <span key="name" className="font-semibold text-[var(--ink)]">
               {agent.name}
               {linkedModels > 0 && (
-                <span className="ml-2 text-xs text-[var(--ink-tertiary)]">({linkedModels} model{linkedModels !== 1 ? "s" : ""})</span>
+                <span className="ml-2 text-xs font-normal text-[var(--ink-tertiary)]">({linkedModels} model{linkedModels !== 1 ? "s" : ""})</span>
               )}
+            </span>,
+
+            // Token Name
+            <span key="tn" className={isRevoked ? "text-[var(--ink-tertiary)] line-through" : ""}>
+              {agent.tokenName || <span className="text-[var(--ink-tertiary)]">—</span>}
             </span>,
 
             // CID
@@ -126,8 +128,7 @@ export default function AgentTokensPage() {
                   <span className="font-mono text-xs" title="Full token only shown once at creation or rotation">
                     {agent.maskedKey}
                   </span>
-                  <span className="text-xs text-[var(--ink-tertiary)]">(masked)</span>
-                </>
+                                  </>
               )}
             </div>,
 
@@ -145,7 +146,7 @@ export default function AgentTokensPage() {
             <StatusBadge key="status" status={isRevoked ? "disabled" : agent.status} />,
 
             // Actions
-            <div className="flex gap-2" key="actions">
+            <div className="flex gap-1.5" key="actions">
               {/* Rotate */}
               <Button
                 size="icon"
@@ -153,7 +154,7 @@ export default function AgentTokensPage() {
                 disabled={isPending}
                 onClick={() => handleRotate(agent.cid, agent.tokenName || agent.name)}
               >
-                <RefreshCcw className="h-4 w-4" />
+                <RefreshCcw className="h-3.5 w-3.5" />
               </Button>
 
               {/* Revoke */}
@@ -164,7 +165,7 @@ export default function AgentTokensPage() {
                 disabled={isPending || isRevoked}
                 onClick={() => handleRevoke(agent.cid, agent.tokenName || agent.name)}
               >
-                <ShieldOff className="h-4 w-4" />
+                <ShieldOff className="h-3.5 w-3.5" />
               </Button>
 
               {/* Budget */}
@@ -175,7 +176,7 @@ export default function AgentTokensPage() {
                 variant={budgetCID === agent.cid ? "primary" : "secondary"}
                 onClick={() => setBudgetCID(budgetCID === agent.cid ? null : agent.cid)}
               >
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-3.5 w-3.5" />
               </Button>
 
               {/* Delete */}
@@ -186,7 +187,7 @@ export default function AgentTokensPage() {
                 disabled={isPending}
                 onClick={() => handleDelete(agent.cid, agent.tokenName || agent.name)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>,
 
@@ -233,7 +234,7 @@ function CopyOnceButton({ value, onDismiss }: { value: string; onDismiss: () => 
     <button
       onClick={handleCopy}
       title={copied ? "Copied!" : "Copy new token — it will disappear after copying"}
-      className="p-1 rounded hover:bg-[var(--surface-strong)] transition-colors"
+      className="p-1 transition-colors hover:bg-[var(--surface-strong)]"
     >
       {copied ? (
         <Check className="h-3.5 w-3.5 text-[var(--ok)]" />

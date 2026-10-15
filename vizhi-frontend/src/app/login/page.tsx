@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Radar } from "lucide-react";
+import { Eye } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { setCurrentUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -113,15 +113,15 @@ export default function LoginPage() {
         strategy="afterInteractive"
         onLoad={initializeGoogle}
       />
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-4">
+      <Card className="w-full max-w-[400px]">
+        <CardHeader className="py-5">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--brand)] text-[var(--brand-ink)]">
-              <Radar className="h-5 w-5" />
+            <span className="flex h-[34px] w-[34px] items-center justify-center bg-[var(--brand)] text-[13px] font-bold text-[var(--brand-ink)]">
+              V
             </span>
             <div>
-              <CardTitle className="text-lg">Vizhi</CardTitle>
-              <p className="text-sm text-[var(--ink-tertiary)]">Sign in to the control plane</p>
+              <CardTitle className="text-base">Vizhi</CardTitle>
+              <p className="text-xs text-[var(--ink-tertiary)]">{mode === "signup" ? "Create your account" : "Sign in to the control plane"}</p>
             </div>
           </div>
         </CardHeader>
@@ -155,25 +155,29 @@ export default function LoginPage() {
                   minLength={mode === "signup" ? 8 : 1}
                   required
                 />
-                <Eye className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--ink-tertiary)]" />
+                <Eye className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-[var(--ink-tertiary)]" />
               </div>
             </div>
             <FieldError message={error} />
             <Button className="w-full" variant="primary" type="submit" disabled={loading}>
-              {loading ? "Working..." : mode === "signup" ? "Create Account" : "Login"}
+              {loading ? "Working…" : mode === "signup" ? "Create account" : "Log in"}
             </Button>
           </form>
-          <div className="my-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
-            <span className="text-xs text-[var(--ink-tertiary)] font-medium">OR</span>
-            <div className="flex-1 h-px bg-[var(--surface-strong)]" />
-          </div>
-          <div className="flex justify-center">
-            <div ref={googleButtonRef} />
-          </div>
+          {googleClientId ? (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[var(--line)]" />
+                <span className="text-[11px] font-semibold tracking-[0.08em] text-[var(--ink-tertiary)]">OR</span>
+                <div className="h-px flex-1 bg-[var(--line)]" />
+              </div>
+              <div className="flex justify-center">
+                <div ref={googleButtonRef} />
+              </div>
+            </>
+          ) : null}
           <button
             type="button"
-            className="mt-5 block w-full text-center text-sm text-[var(--ink-secondary)] transition hover:text-[var(--ink)]"
+            className="mt-5 block w-full text-center text-[13px] text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)]"
             onClick={() => {
               setError("");
               setMode(mode === "login" ? "signup" : "login");
